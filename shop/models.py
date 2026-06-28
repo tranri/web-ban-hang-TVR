@@ -78,7 +78,6 @@ class ShopConfiguration(models.Model):
         return self.title
 
 
-# YÊU CẦU 1: Bảng lưu NHIỀU ảnh Banner
 class BannerImage(models.Model):
     config = models.ForeignKey(ShopConfiguration, related_name='banners', on_delete=models.CASCADE)
     image = models.ImageField(upload_to="banners/", verbose_name="Tải ảnh Banner lên")
@@ -91,7 +90,6 @@ class BannerImage(models.Model):
         verbose_name_plural = "Quản lý nhiều Banner ảnh"
 
 
-# YÊU CẦU 2: Bảng lưu Bài viết tài liệu
 class DocumentPost(models.Model):
     title = models.CharField(max_length=250, verbose_name="Tiêu đề tài liệu")
     slug = models.SlugField(max_length=250, unique=True, verbose_name="Đường dẫn (Slug)")
@@ -107,3 +105,26 @@ class DocumentPost(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Order(models.Model):
+    full_name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20)
+    address = models.TextField()
+    note = models.TextField(blank=True, null=True)
+    total_price = models.DecimalField(max_digits=12, decimal_places=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Đơn hàng {self.id} - {self.full_name}"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=12, decimal_places=0)
+
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity}"

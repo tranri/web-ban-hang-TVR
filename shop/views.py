@@ -1,10 +1,11 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
-from .models import Category, Product, ShopConfiguration, DocumentPost
+from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum
 from django.urls import reverse
+from django.core.mail import send_mail
 import random
 
 
@@ -45,10 +46,53 @@ def thanh_toan(request):
 
 def xac_nhan_don_hang(request):
     if request.method == 'POST':
-        # Đây là nơi bạn sẽ xử lý lưu đơn hàng vào Database
-        # Ví dụ: Order.objects.create(...)
-        return render(request, 'shop/xac_nhan_thanh_cong.html')
+        config = ShopConfiguration.objects.first()
+        shop_email = config.email if config else 'ritran7395@gmail.com'
 
+        # 1. Lưu thông tin Order
+        order = Order.objects.create(
+            full_name=request.POST.get('full_name'),
+            email=request.POST.get('email'),
+            phone=request.POST.get('phone'),
+            address=request.POST.get('address'),
+            note=request.POST.get('note'),
+            total_price=0  # Tạm tính, sẽ cập nhật sau
+        )
+
+        # 2. Lưu chi tiết sản phẩm (OrderItem)
+        cart = request.session.get('cart', {})
+        total = 0
+        order_details_text = "\n--- Chi tiết đơn hàng ---\n"
+        for p_id, item in cart.items():
+            product = Product.objects.get(id=int(p_id))
+            item_total = product.price * item['quantity']
+            total += item_total
+            order_details_text += f"- {product.name}: {item['quantity']} x {product.price:,}đ = {item_total:,}đ\n"
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                quantity=item['quantity'],
+                price=product.price
+            )
+        order_details_text += f"-------------------------\nTổng cộng: {total:,}đ"
+        # Cập nhật tổng tiền vào đơn hàng
+        order.total_price = total
+        order.save()
+
+        # 3. Gửi Email thông báo cho chủ shop
+        send_mail(
+            subject=f'Đơn hàng mới #{order.id}',
+            message=f'Khách hàng {order.full_name} vừa đặt hàng.\n'
+                    f'SĐT: {order.phone}\n'
+                    f'Địa chỉ: {order.address}\n'
+                    f'Ghi chú: {order.note or "Không có"}\n'
+                    f'{order_details_text}',  # Chèn danh sách sản phẩm vào đây
+            from_email='shop@yourdomain.com',
+            recipient_list=[shop_email],
+        )
+        # 4. Xóa giỏ hàng
+        del request.session['cart']
+        return render(request, 'shop/xac_nhan_thanh_cong.html', {'order_id': order.id})
     return redirect('shop:thanh_toan')
 
 
@@ -135,20 +179,27 @@ def trang_chu(request):
     })
 
 
-# THÊM MỚI: Hàm xử lý trang Chi tiết sản phẩm
 def chi_tiet_san_pham(request, slug):
     config = get_shop_config()
     categories = Category.objects.all()
     product = get_object_or_404(Product, slug=slug)
 
-    # Lấy danh sách 50 sản phẩm đề xuất bán chạy/ngẫu nhiên hiển thị ở phía dưới phần liên quan
+    # Lấy giỏ hàng từ session
+    cart = request.session.get('cart', {})
+    # Lấy số lượng đã có trong giỏ (mặc định là 0 nếu chưa có)
+    qty_in_cart = 0
+    product_id_str = str(product.id)
+    if product_id_str in cart:
+        qty_in_cart = cart[product_id_str].get('quantity', 0)
+
     suggested_products = get_top_selling_or_random(target_count=50)
 
     return render(request, 'shop/chi_tiet_san_pham.html', {
         'config': config,
         'categories': categories,
         'product': product,
-        'products': suggested_products  # Truyền biến này để vòng lặp sản phẩm ở chân trang hiển thị
+        'products': suggested_products,
+        'qty_in_cart': qty_in_cart,  # Truyền biến này sang template
     })
 
 
@@ -175,18 +226,28 @@ def chi_tiet_tai_lieu(request, slug):
     })
 
 
-# Thêm hoặc cập nhật hàm xử lý Thêm vào giỏ hàng bằng AJAX
 def them_vao_gio(request, product_id):
     if request.method == 'POST':
-        # Lấy giỏ hàng hiện tại từ session, nếu chưa có thì tạo mới dict rỗng
-        cart = request.session.get('cart', {})
-
-        # Lấy số lượng người dùng chọn gửi lên (mặc định là 1 nếu không truyền)
+        # 1. Lấy sản phẩm để kiểm tra tồn kho
+        product = get_object_or_404(Product, id=product_id)
         qty = int(request.POST.get('quantity', 1))
 
-        product = get_object_or_404(Product, id=product_id)
+        # 2. Lấy giỏ hàng hiện tại
+        cart = request.session.get('cart', {})
         p_id_str = str(product_id)
 
+        # Tính số lượng hiện có trong giỏ + số lượng muốn thêm
+        current_in_cart = cart[p_id_str]['quantity'] if p_id_str in cart else 0
+        total_requested = current_in_cart + qty
+
+        # 3. KIỂM TRA TỒN KHO (Chốt chặn tại server)
+        if total_requested > product.stock:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Rất tiếc, cửa hàng chỉ còn {product.stock} sản phẩm.'
+            })
+
+        # 4. Nếu hợp lệ thì mới lưu vào giỏ hàng
         if p_id_str in cart:
             cart[p_id_str]['quantity'] += qty
         else:
@@ -195,27 +256,24 @@ def them_vao_gio(request, product_id):
                 'price': float(product.price)
             }
 
-        # Lưu lại giỏ hàng vào session
         request.session['cart'] = cart
 
-        # Tính tổng số lượng sản phẩm hiện có trong giỏ hàng
+        # Tính tổng số lượng để cập nhật giao diện
         tong_so_luong = sum(item['quantity'] for item in cart.values())
 
-        # TRẢ VỀ THÊM CẢ product_id VÀ số lượng hiện tại của món đó
         return JsonResponse({
             'status': 'success',
-            'product_id': product.id,  # <--- THÊM DÒNG NÀY
-            'current_qty': cart[p_id_str]['quantity'],  # <--- THÊM DÒNG NÀY
+            'product_id': product.id,
+            'current_qty': cart[p_id_str]['quantity'],
             'product_name': product.name,
             'product_price': f"{product.price:,.0f}".replace(",", ".") + "đ",
-            'product_raw_price': float(product.price),  # <--- THÊM DÒNG NÀY (để tính toán JS)
+            'product_raw_price': float(product.price),
             'product_image': product.image.url if product.image else '/static/images/no-image.png',
             'total_items': tong_so_luong
         })
     return JsonResponse({'status': 'error', 'message': 'Yêu cầu không hợp lệ'}, status=400)
 
 
-# Cập nhật lại trang xem giỏ hàng để lấy dữ liệu thực tế từ Session
 def gio_hang(request):
     config = get_shop_config()
     categories = Category.objects.all()
@@ -270,15 +328,25 @@ def xoa_khoi_gio(request, product_id):
 # THÊM MỚI: Hàm xử lý cập nhật số lượng khi bấm cộng trừ ở trang giỏ hàng
 def cap_nhat_gio(request, product_id):
     if request.method == 'POST':
+        # Lấy sản phẩm để kiểm tra tồn kho
+        product = get_object_or_404(Product, id=product_id)
+        new_qty = int(request.POST.get('quantity', 1))
+
+        # Kiểm tra tồn kho trước khi lưu
+        if new_qty > product.stock:
+            return JsonResponse({'status': 'error', 'message': f'Sản phẩm chỉ còn {product.stock} chiếc trong kho.'},
+                                status=400)
+
         cart = request.session.get('cart', {})
         p_id_str = str(product_id)
-        new_qty = int(request.POST.get('quantity', 1))
 
         if p_id_str in cart and new_qty >= 1:
             cart[p_id_str]['quantity'] = new_qty
             request.session['cart'] = cart
+            return JsonResponse({'status': 'success'})
 
-        return JsonResponse({'status': 'success'})
+        return JsonResponse({'status': 'error', 'message': 'Sản phẩm không có trong giỏ hàng'}, status=400)
+
     return JsonResponse({'status': 'error'}, status=400)
 
 

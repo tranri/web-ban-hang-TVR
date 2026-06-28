@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Product, ShopConfiguration, BannerImage, DocumentPost
+from .models import Category, Product, ShopConfiguration, BannerImage, DocumentPost, Order, OrderItem
 
 
 # Cho phép thêm ảnh Banner trực tiếp trong trang cấu hình Website
@@ -38,3 +38,14 @@ class ProductAdmin(admin.ModelAdmin):
 class DocumentPostAdmin(admin.ModelAdmin):
     list_display = ['title', 'created_at']
     prepopulated_fields = {'slug': ('title',)}
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at']
+    inlines = [OrderItemInline]

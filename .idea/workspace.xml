@@ -2,31 +2,15 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="9d0ff5e6-ed72-4b0f-bd59-ab0145749fe0" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/shop/context_processors.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/base.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_san_pham.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_tai_lieu.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_bao_hanh.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_bao_mat.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_doi_tra.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_van_chuyen.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/dang_nhap.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/gio_hang.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/ket_qua_tim_kiem.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/lien_he.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_categories.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_categories_flat.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_services.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/tai_lieu.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/thanh_toan.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/templates/shop/trang_chu.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/shop/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/version_1_0.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/version_1_0.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/migrations/0013_order_orderitem.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/xac_nhan_thanh_cong.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/core_backend/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/core_backend/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core_backend/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/core_backend/urls.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/shop/admin.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/admin.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/shop/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/templates/shop/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/shop/templates/shop/base.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_san_pham.html" beforeDir="false" afterPath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_san_pham.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/templates/shop/thanh_toan.html" beforeDir="false" afterPath="$PROJECT_DIR$/shop/templates/shop/thanh_toan.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/shop/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/views.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
