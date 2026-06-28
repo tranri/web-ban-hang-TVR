@@ -1,0 +1,97 @@
+{% extends 'shop/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            <h3 class="fw-bold text-dark mb-4 text-center">
+                <i class="bi bi-credit-card-2-front text-success"></i> THANH TOÁN ĐƠN HÀNG
+            </h3>
+
+            <form method="POST" action="{% url 'shop:xac_nhan_don_hang' %}" class="row g-5">
+                {% csrf_token %}
+
+                <div class="col-md-6">
+                    <div class="bg-white p-4 rounded shadow-sm border h-100">
+                        <h5 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-success"></i> Thông tin nhận
+                            hàng</h5>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Email</label>
+                            <input type="email" name="email" class="form-control" required placeholder="Nhập email...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Họ và tên</label>
+                            <input type="text" name="full_name" class="form-control" required
+                                   placeholder="Nhập họ tên...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Số điện thoại</label>
+                            <input type="tel" name="phone" class="form-control" required
+                                   placeholder="Nhập số điện thoại...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Địa chỉ chi tiết</label>
+                            <textarea name="address" class="form-control" rows="3" required
+                                      placeholder="Số nhà, đường, phường/xã..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="bg-white p-4 rounded shadow-sm border h-100">
+                        <h5 class="fw-bold mb-3 border-bottom pb-2">
+                            Đơn hàng ({{ tong_so_luong }} sản phẩm)
+                        </h5>
+                        <div class="order-summary-list mb-3" style="max-height: 400px; overflow-y: auto;">
+                            {% for item in cart_items %}
+                            <div class="d-flex align-items-center mb-3 p-2 border rounded">
+                                <div class="position-relative me-3" style="width: 60px; height: 60px; flex-shrink: 0;">
+                                    {% if item.product.image %}
+                                    <img src="{{ item.product.image.url }}" class="w-100 h-100 rounded border"
+                                         style="object-fit: cover;">
+                                    {% else %}
+                                    <div class="w-100 h-100 bg-light rounded border d-flex align-items-center justify-content-center">
+                                        <i class="bi bi-image text-muted"></i>
+                                    </div>
+                                    {% endif %}
+
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                          style="font-size: 0.75rem; border: 2px solid white;">{{item.quantity}}
+                                    </span>
+                                </div>
+
+                                <div class="text-dark fw-bold small flex-grow-1">
+                                    {{ item.product.name }}
+                                </div>
+
+                                <div class="text-danger fw-bold small ms-2"
+                                     style="white-space: nowrap; flex-shrink: 0;">
+                                    {{ item.total_price|intcomma }} đ
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between fw-bold fs-5 text-dark mb-4">
+                            <span>TỔNG CỘNG</span>
+                            <span class="text-danger">{{ tong_tien|intcomma }} đ</span>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-sm">
+                            <i class="bi bi-check-circle"></i> ĐẶT HÀNG NGAY
+                        </button>
+                        <div class="text-center mt-3">
+                            <a href="{% url 'shop:gio_hang' %}" class="text-decoration-none text-muted">
+                                <i class="bi bi-chevron-left"></i> Quay về giỏ hàng
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

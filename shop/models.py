@@ -1,7 +1,10 @@
 from django.db import models
-from django.urls import reverse
+
 
 class Category(models.Model):
+    # Thêm trường parent để tự liên kết tạo mối quan hệ CHA - CON
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='children', on_delete=models.CASCADE,
+                               verbose_name="Danh mục cha (Bỏ trống nếu là danh mục gốc)")
     name = models.CharField(max_length=200, verbose_name="Tên danh mục")
     slug = models.SlugField(max_length=200, unique=True, verbose_name="Đường dẫn (Slug)")
     description = models.TextField(blank=True, verbose_name="Mô tả danh mục")
@@ -12,22 +15,20 @@ class Category(models.Model):
         verbose_name_plural = 'Các danh mục'
 
     def __str__(self):
+        # Hiển thị phân cấp rõ ràng trong Admin
+        if self.parent:
+            return f"{self.parent.name} --> {self.name}"
         return self.name
 
 
 class Product(models.Model):
-    category = models.ForeignKey(
-        Category,
-        related_name='products',
-        on_delete=models.CASCADE,
-        verbose_name="Danh mục"
-    )
+    category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE, verbose_name="Danh mục")
     name = models.CharField(max_length=200, verbose_name="Tên sản phẩm")
     slug = models.SlugField(max_length=200, unique=True, verbose_name="Đường dẫn (Slug)")
     image = models.ImageField(upload_to="products/%Y/%m/%d", blank=True, null=True, verbose_name="Hình ảnh")
     description = models.TextField(blank=True, verbose_name="Mô tả chi tiết/Thông số")
     datasheet_url = models.URLField(blank=True, verbose_name="Link Tài liệu (Datasheet)")
-    price = models.DecimalField(max_length=10, max_digits=10, decimal_places=0, verbose_name="Giá bán (VNĐ)")
+    price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá bán (VNĐ)")
     stock = models.IntegerField(default=0, verbose_name="Số lượng tồn kho")
     available = models.BooleanField(default=True, verbose_name="Hiển thị/Bán")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
@@ -40,3 +41,69 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ShopConfiguration(models.Model):
+    title = models.CharField(max_length=200, default="Điện Tử TVR", verbose_name="Tên cửa hàng")
+    logo = models.ImageField(upload_to="logo/", blank=True, null=True, verbose_name="Logo website")
+    banner_text_fallback = models.CharField(max_length=255,
+                                            default="🚀 COMBO LINH KIỆN ĐỒ ÁN TỐT NGHIỆP GIẢM 10% - CUNG CẤP LINH KIỆN GIÁ SINH VIÊN",
+                                            verbose_name="Chữ thay thế (nếu không có ảnh)")
+    address = models.CharField(max_length=255, default="Hòa Khánh Bắc, Quận Liên Chiểu, Thành phố Đà Nẵng",
+                               verbose_name="Địa chỉ cửa hàng")
+    working_time = models.CharField(max_length=255,
+                                    default="7:30-11:30; 13:30-17:30 | Thứ 7, chủ nhật: 08:30-11:30; 14:30-17:30",
+                                    verbose_name="Thời gian làm việc")
+    phone = models.CharField(max_length=15, default="0705 296 182", verbose_name="Số điện thoại Hotline")
+    email = models.EmailField(default="contact.dientutvr@gmail.com", verbose_name="Email cửa hàng")
+    zalo_phone = models.CharField(max_length=15, default="0705296182", verbose_name="SĐT nhận chat Zalo (Viết liền số)")
+    messenger_url = models.URLField(default="https://m.me/dientutvr", verbose_name="Link Chat Messenger FB")
+    map_embed_url = models.TextField(default="", verbose_name="Mã nhúng bản đồ Iframe")
+    service_image = models.ImageField(upload_to="services/", blank=True, null=True,
+                                      verbose_name="Ảnh mục Thiết kế Đồ Án")
+    service_video = models.FileField(upload_to="services/videos/", blank=True, null=True,
+                                     verbose_name="Video giới thiệu (Tải từ máy)")
+
+    # === CÁC TRƯỜNG THÊM MỚI THEO YÊU CẦU GIẤY TỜ HỘ KINH DOANH ===
+    hkd_name = models.CharField(max_length=255, default="HKD Điện tử Nguyễn Hiền", verbose_name="Tên Hộ Kinh Doanh")
+    registration_number = models.CharField(max_length=100, default="8426840468-001", verbose_name="Số GPĐKKD")
+    registration_place = models.CharField(max_length=150, default="UBND Quận Liên Chiểu", verbose_name="Nơi cấp GPĐKKD")
+    registration_date = models.DateField(null=True, blank=True, verbose_name="Ngày cấp GPĐKKD")
+
+    class Meta:
+        verbose_name = "Cấu hình Website"
+        verbose_name_plural = "Cấu hình Website"
+
+    def __str__(self):
+        return self.title
+
+
+# YÊU CẦU 1: Bảng lưu NHIỀU ảnh Banner
+class BannerImage(models.Model):
+    config = models.ForeignKey(ShopConfiguration, related_name='banners', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to="banners/", verbose_name="Tải ảnh Banner lên")
+    alt_text = models.CharField(max_length=150, blank=True, verbose_name="Mô tả ảnh (SEO)")
+    order = models.IntegerField(default=0, verbose_name="Thứ tự hiển thị")
+
+    class Meta:
+        ordering = ['order']
+        verbose_name = "Ảnh Banner"
+        verbose_name_plural = "Quản lý nhiều Banner ảnh"
+
+
+# YÊU CẦU 2: Bảng lưu Bài viết tài liệu
+class DocumentPost(models.Model):
+    title = models.CharField(max_length=250, verbose_name="Tiêu đề tài liệu")
+    slug = models.SlugField(max_length=250, unique=True, verbose_name="Đường dẫn (Slug)")
+    summary = models.TextField(verbose_name="Tóm tắt ngắn")
+    content = models.TextField(verbose_name="Nội dung chi tiết/Hướng dẫn/Mã code")
+    file_url = models.URLField(blank=True, verbose_name="Link tải File đính kèm (nếu có)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày đăng")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Bài viết tài liệu"
+        verbose_name_plural = "Góc Tài liệu kỹ thuật"
+
+    def __str__(self):
+        return self.title

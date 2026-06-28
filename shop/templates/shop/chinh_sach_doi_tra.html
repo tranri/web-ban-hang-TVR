@@ -1,0 +1,67 @@
+{% extends 'shop/base.html' %}
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <h1 class="h3 text-uppercase text-danger fw-bold mb-4">CHÍNH SÁCH ĐỔI TRẢ</h1>
+
+                <p>Để đảm bảo trải nghiệm mua sắm tốt nhất, {{ config.title|upper }} áp dụng chính sách đổi/trả sản phẩm
+                    minh bạch
+                    dựa trên xác thực lỗi kỹ thuật. Quý khách vui lòng lưu ý các quy định sau:</p>
+
+                <h5 class="fw-bold mt-4">1. Phạm vi & Thời hạn áp dụng</h5>
+                <p>{{ config.title|upper }} hỗ trợ đổi mới sản phẩm cho Quý khách trong vòng <strong>03 ngày</strong> kể
+                    từ
+                    thời điểm nhận hàng thành công, áp dụng cho các sản phẩm xác định bị lỗi kỹ thuật do nhà sản xuất.
+                </p>
+
+                <h5 class="fw-bold mt-4">2. Điều kiện đổi/trả hợp lệ</h5>
+                <p>Sản phẩm được chấp nhận đổi mới khi đáp ứng đầy đủ các tiêu chuẩn sau:</p>
+                <ul>
+                    <li><strong>Xác thực qua video:</strong> Có video quay lại quá trình bóc hộp và kiểm tra sản phẩm
+                        (như đã quy định tại Chính sách bảo hành).
+                    </li>
+                    <li><strong>Trạng thái sản phẩm:</strong> Sản phẩm còn nguyên vẹn, không trầy xước, không có dấu
+                        hiệu đã qua hàn, sửa chữa hoặc can thiệp sâu vào cấu trúc phần cứng.
+                    </li>
+                    <li><strong>Đầy đủ linh kiện:</strong> Còn nguyên vỏ hộp, phụ kiện đi kèm và các tặng phẩm (nếu có).
+                    </li>
+                    <li><strong>Chứng từ:</strong> Có hóa đơn mua hàng (hoặc mã đơn hàng) hợp lệ tại
+                        {{ config.title|upper }}.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">3. Các trường hợp từ chối đổi/trả</h5>
+                <p>Chúng tôi xin phép không áp dụng đổi/trả trong các tình huống sau:</p>
+                <ul>
+                    <li><strong>Sản phẩm không lỗi:</strong> Sản phẩm hoạt động bình thường, không có lỗi kỹ thuật.</li>
+                    <li><strong>Sai nhu cầu:</strong> Khách hàng mua nhầm mẫu, nhầm thông số hoặc sản phẩm không phù hợp
+                        với nhu cầu cá nhân.
+                    </li>
+                    <li><strong>Lỗi từ người dùng:</strong> Sản phẩm bị hư hỏng do đấu nối sai, quá áp, chập cháy, rơi
+                        vỡ, ngấm nước hoặc các tác động vật lý khác do quá trình sử dụng.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">4. Lời khuyên trước khi mua sắm</h5>
+                <p>Để tránh sai sót và đảm bảo lựa chọn đúng linh kiện, Quý khách vui lòng:</p>
+                <ul>
+                    <li>Tìm hiểu kỹ thông tin kỹ thuật được mô tả chi tiết trên website.</li>
+                    <li>Liên hệ ngay với bộ phận Kỹ thuật {{ config.title|upper }} qua Zalo OA hoặc Facebook Messenger
+                        để được tư vấn
+                        chính xác trước khi chốt đơn.
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

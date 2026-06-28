@@ -1,0 +1,59 @@
+{% extends 'shop/base.html' %}
+
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <h2 class="fw-bold mb-4 text-uppercase text-danger border-bottom pb-2">CHÍNH SÁCH VẬN CHUYỂN</h2>
+
+                <p>Tại {{ config.title|upper }}, chúng tôi cam kết mang đến dịch vụ vận chuyển nhanh chóng, an toàn và
+                    đảm bảo linh kiện đến tay khách hàng trong tình trạng tốt nhất.</p>
+
+                <h5 class="fw-bold mt-4 text-dark">1. Phạm vi áp dụng</h5>
+                <p>Chúng tôi hỗ trợ vận chuyển toàn quốc cho tất cả các đơn hàng đặt trực tuyến hoặc qua các kênh hỗ trợ
+                    của TVR.</p>
+
+                <h5 class="fw-bold mt-4 text-dark">2. Thời gian giao hàng</h5>
+                <p>Khu vực nội thành: Từ 1 – 2 ngày làm việc.</p>
+                <p>Khu vực ngoại thành & tỉnh thành khác: Từ 3 – 5 ngày làm việc (tùy thuộc vào khoảng cách và đơn vị
+                    vận chuyển).</p>
+                <p><em>Lưu ý: Thời gian giao hàng có thể thay đổi trong các dịp lễ, tết hoặc do ảnh hưởng của thời
+                    tiết/thiên tai.</em></p>
+
+                <h5 class="fw-bold mt-4 text-dark">3. Phí vận chuyển</h5>
+                <p>Đơn hàng đạt giá trị tối thiểu: Miễn phí vận chuyển (nếu có chương trình ưu đãi hiện hành).</p>
+                <p>Đơn hàng thông thường: Phí vận chuyển sẽ được tính dựa trên trọng lượng gói hàng, kích thước và địa
+                    chỉ nhận hàng thông qua hệ thống tính phí tự động của đơn vị đối tác vận chuyển tại trang thanh
+                    toán.</p>
+
+                <h5 class="fw-bold mt-4 text-dark">4. Đơn vị vận chuyển liên kết</h5>
+                <p>{{ config.title|upper }} hợp tác với các đối tác uy tín như: Giao Hàng Tiết Kiệm, Giao Hàng Nhanh,
+                    Viettel Post
+                    hoặc các đơn vị chuyển phát nhanh chuyên nghiệp khác để đảm bảo an toàn cho linh kiện điện tử.</p>
+
+                <h5 class="fw-bold mt-4 text-dark">5. Quy trình nhận hàng và kiểm tra</h5>
+                <p>Quý khách vui lòng kiểm tra số lượng sản phẩm ngay khi nhận hàng. Nếu phát hiện sai sót, hư hỏng do
+                    vận chuyển, hãy liên hệ ngay với chúng tôi qua số điện thoại hỗ trợ hoặc Zalo để được giải quyết kịp
+                    thời.</p>
+
+                <h5 class="fw-bold mt-4 text-dark">Một số lưu ý quan trọng cho khách hàng:</h5>
+                <ul>
+                    <li>Vui lòng cung cấp chính xác địa chỉ và số điện thoại liên lạc.</li>
+                    <li>Nếu thay đổi địa chỉ nhận hàng sau khi đơn hàng đã gửi đi, quý khách vui lòng thông báo sớm để
+                        chúng tôi phối hợp với đơn vị vận chuyển.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

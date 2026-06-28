@@ -1,27 +1,79 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="9d0ff5e6-ed72-4b0f-bd59-ab0145749fe0" name="Changes" comment="" />
+    <list default="true" id="9d0ff5e6-ed72-4b0f-bd59-ab0145749fe0" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/shop/context_processors.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/base.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_san_pham.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chi_tiet_tai_lieu.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_bao_hanh.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_bao_mat.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_doi_tra.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/chinh_sach_van_chuyen.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/dang_nhap.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/gio_hang.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/ket_qua_tim_kiem.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/lien_he.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_categories.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_categories_flat.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/partials/sidebar_services.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/tai_lieu.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/thanh_toan.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/templates/shop/trang_chu.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/shop/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/version_1_0.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/version_1_0.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core_backend/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/core_backend/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core_backend/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/core_backend/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/admin.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/admin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shop/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/shop/views.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 0
-}]]></component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+        <option value="Dockerfile" />
+        <option value="HTML File" />
+      </list>
+    </option>
+  </component>
+  <component name="FormatOnSaveOptions">
+    <option name="myRunOnSave" value="true" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 0
+}</component>
   <component name="ProjectId" id="3FTVHr003ojNZ9OdEBw9Ex6KPJ0" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_MARK_IGNORED_FILES_AS_EXCLUDED&quot;: &quot;true&quot;,
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;actions.on.save&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -38,5 +90,16 @@
       <updated>1782098961983</updated>
     </task>
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

@@ -1,0 +1,44 @@
+{% extends 'shop/base.html' %}
+
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <h4 class="fw-bold text-success border-bottom pb-2 mb-4">
+                    <i class="bi bi-file-earmark-code-fill"></i> GÓC TÀI LIỆU KỸ THUẬT
+                </h4>
+                <div class="row g-3">
+                    {% for post in posts %}
+                    <div class="col-md-6">
+                        <div class="card h-100 shadow-sm border">
+                            <div class="card-body">
+                                <h5 class="card-title fw-bold text-dark">{{ post.title }}</h5>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-calendar3"></i> Đăng ngày: {{ post.created_at|date:"d/m/Y" }}
+                                </small>
+                                <p class="card-text text-secondary small">{{ post.summary }}</p>
+                                <a href="{% url 'shop:chi_tiet_tai_lieu' post.slug %}"
+                                   class="btn btn-sm btn-outline-success fw-bold">
+                                    Đọc hướng dẫn & Lấy mã Code
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center p-5 text-muted">Hệ thống đang cập nhật tài liệu hướng dẫn mới...</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

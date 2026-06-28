@@ -1,0 +1,87 @@
+{% extends 'shop/base.html' %}
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <h1 class="h3 text-uppercase text-danger fw-bold mb-4">CHÍNH SÁCH BẢO MẬT</h1>
+
+                <p>Tại {{config.title|upper}}, chúng tôi hiểu rằng thông tin cá nhân là tài sản quý giá của khách hàng.
+                    Chính sách
+                    bảo mật dưới đây cam kết cách chúng tôi thu thập, sử dụng và bảo vệ dữ liệu của bạn khi truy cập và
+                    mua sắm tại website của chúng tôi.</p>
+
+                <h5 class="fw-bold mt-4">1. Thu thập thông tin cá nhân</h5>
+                <p>Khi sử dụng dịch vụ tại {{config.title|upper}}, chúng tôi có thể yêu cầu bạn cung cấp các thông tin
+                    cơ bản (Họ
+                    tên, Email, Số điện thoại, Địa chỉ giao hàng...).</p>
+                <ul>
+                    <li><strong>Mục đích:</strong> Để hỗ trợ xử lý đơn hàng, giải đáp thắc mắc, cập nhật thông tin kỹ
+                        thuật và nâng cao trải nghiệm giao diện website.
+                    </li>
+                    <li><strong>Thông tin kỹ thuật:</strong> Chúng tôi tự động ghi nhận các thông tin như địa chỉ IP,
+                        loại trình duyệt, thời gian truy cập để phân tích lưu lượng, từ đó tối ưu hóa hệ thống.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">2. Sử dụng & Chia sẻ thông tin</h5>
+                <ul>
+                    <li><strong>Sử dụng:</strong> Thông tin chỉ được dùng cho mục đích liên hệ xử lý đơn hàng hoặc gửi
+                        các thông tin kỹ thuật, ưu đãi sản phẩm mới (nếu bạn đăng ký nhận tin).
+                    </li>
+                    <li><strong>Cam kết không chia sẻ:</strong> Chúng tôi tuyệt đối không bán, không cho thuê thông tin
+                        cá nhân của bạn cho bên thứ ba.
+                    </li>
+                    <li><strong>Ngoại lệ:</strong> Chúng tôi chỉ cung cấp thông tin cho bên thứ ba trong các trường hợp
+                        bắt buộc theo yêu cầu của cơ quan pháp luật, hoặc khi cần thiết để bảo vệ quyền lợi hợp pháp và
+                        an toàn của chính khách hàng cũng như {{config.title|upper}}.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">3. Bảo mật thông tin</h5>
+                <p>Chúng tôi áp dụng các chuẩn bảo mật dữ liệu hiện đại nhằm ngăn chặn sự truy cập trái phép. Tuy nhiên,
+                    khách hàng cần lưu ý:</p>
+                <ul>
+                    <li>Môi trường Internet không thể cam kết an toàn tuyệt đối 100%. Vì vậy, bạn nên tự bảo mật mật
+                        khẩu tài khoản và tuyệt đối không chia sẻ với bất kỳ ai.
+                    </li>
+                    <li>Nếu sử dụng thiết bị công cộng, hãy luôn đăng xuất tài khoản sau khi hoàn tất phiên làm việc.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">4. Sử dụng Cookie</h5>
+                <p>{{config.title|upper}} sử dụng "Cookie" để ghi nhớ tùy chọn của bạn, giúp tiết kiệm thời gian khi
+                    truy cập lại
+                    mà không cần đăng nhập lại. Bạn có thể thay đổi cài đặt trình duyệt để từ chối Cookie, nhưng điều
+                    này có thể làm giảm trải nghiệm của một số tính năng trên website.</p>
+
+                <h5 class="fw-bold mt-4">5. Quy định về "Spam" (Thư rác)</h5>
+                <p>Chúng tôi tôn trọng sự riêng tư của bạn. {{config.title|upper}} khẳng định:</p>
+                <ul>
+                    <li>Chỉ gửi Email khi khách hàng có đăng ký hoặc sử dụng dịch vụ.</li>
+                    <li>Mọi Email đều có link "Hủy đăng ký" để bạn chủ động dừng nhận tin nếu không còn nhu cầu.</li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">6. Thay đổi chính sách</h5>
+                <p>{{config.title|upper}} có quyền cập nhật nội dung chính sách này bất kỳ lúc nào để phù hợp với quy
+                    trình hoạt
+                    động và phản hồi từ khách hàng. Phiên bản mới nhất sẽ luôn được hiển thị trên website. Khi bạn tiếp
+                    tục sử dụng dịch vụ sau khi có cập nhật, điều đó đồng nghĩa với việc bạn đã đồng ý và tuân thủ các
+                    quy định mới.</p>
+                <p class="small text-muted mt-3"><em>Lưu ý: Chính sách này chỉ áp dụng tại website của
+                    {{config.title|upper}}.
+                    Chúng tôi không chịu trách nhiệm về nội dung hoặc chính sách bảo mật của các trang web bên thứ ba có
+                    liên kết tại website của chúng tôi.</em></p>
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

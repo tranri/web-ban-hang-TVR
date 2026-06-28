@@ -1,0 +1,248 @@
+{% extends 'shop/base.html' %}
+{% load humanize %}
+
+{% block title %}{{ product.name }} - {{ config.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <div class="row">
+                    <div class="col-md-5 text-center border-end">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}" class="img-fluid rounded mb-2"
+                             style="max-height: 300px; object-fit: contain;" id="target-prod-img"
+                             alt="{{ product.name }}">
+                        {% else %}
+                        <i class="bi bi-image text-muted" style="font-size: 150px;"></i>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-7 ps-md-4">
+                        <h3 class="fw-bold text-dark mb-2" id="target-prod-name">{{ product.name }}</h3>
+                        <p class="text-muted small mb-3">
+                            Tình trạng:
+                            {% if product.stock > 0 %}
+                            <span class="badge bg-success">Còn hàng</span>
+                            {% else %}
+                            <span class="badge bg-danger">Hết hàng</span>
+                            {% endif %}
+                        </p>
+
+                        <div class="p-3 bg-light rounded mb-3">
+                            <h4 class="text-danger fw-bold mb-0" id="target-prod-price">{{ product.price|intcomma }}
+                                đ</h4>
+                        </div>
+
+                        <div class="mb-4 d-flex align-items-center">
+                            <span class="text-secondary me-3 small fw-bold">Số lượng:</span>
+                            {% if product.stock > 0 %}
+                            <div class="input-group input-group-sm" style="max-width: 130px;">
+                                <button class="btn btn-outline-secondary fw-bold px-3" type="button"
+                                        onclick="giamQtyDetail()">-
+                                </button>
+                                <input type="text" id="detail-qty-input"
+                                       class="form-control text-center fw-bold bg-white text-dark" value="1" readonly>
+                                <button class="btn btn-outline-secondary fw-bold px-3" type="button"
+                                        onclick="tangQtyDetail()">+
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="input-group input-group-sm" style="max-width: 130px;">
+                                <input type="text" class="form-control text-center fw-bold bg-light text-muted"
+                                       value="0" readonly>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex mt-4">
+                            {% if product.stock > 0 %}
+                            <button class="btn btn-danger btn-lg fw-bold px-5 py-2 shadow-sm"
+                                    onclick="guiLenGioHang('{{ product.id }}')">
+                                <i class="bi bi-cart-plus-fill me-2"></i> THÊM VÀO GIỎ HÀNG
+                            </button>
+                            {% else %}
+                            <button class="btn btn-secondary btn-lg fw-bold px-5 py-2 shadow-sm" disabled>
+                                <i class="bi bi-cart-x-fill me-2"></i> HẾT HÀNG
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-top">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-info-circle-fill text-primary"></i> Mô tả thông
+                        số kỹ thuật</h5>
+                    <div class="text-secondary" style="line-height: 1.7; white-space: pre-line;">
+                        {{ product.description|default:"Thông số kỹ thuật đang được cập nhật..." }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="cartSuccessModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+        <div class="modal-content border-0 shadow overflow-hidden rounded-3">
+            <div class="modal-header text-white py-2 px-3 align-items-center" style="background-color: #0b22a1;">
+                <h6 class="modal-title fw-bold mb-0"><i class="bi bi-check-circle-fill me-2"></i> Mua hàng thành công
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"
+                        style="font-size: 12px;"></button>
+            </div>
+            <div class="modal-body p-3 bg-white">
+                <div class="d-flex align-items-start gap-3 border-bottom pb-3 mb-2">
+                    <img id="popup-img" src="" alt="Sản phẩm" class="img-thumbnail"
+                         style="width: 80px; height: 80px; object-fit: contain;">
+                    <div>
+                        <p class="fw-bold text-dark mb-1 lh-sm" id="popup-name" style="font-size: 14px;"></p>
+                        <p class="text-danger fw-bold mb-0" id="popup-price" style="font-size: 16px;"></p>
+                    </div>
+                </div>
+                <p class="text-secondary my-3 text-center" style="font-size: 14px;">Giỏ hàng của bạn hiện có <strong
+                        class="text-primary fs-5 px-1" id="popup-count">0</strong> sản phẩm</p>
+
+                <div class="row g-2 mt-2">
+                    <div class="col-6">
+                        <button class="btn btn-warning w-100 fw-bold py-2 text-dark shadow-sm border-0"
+                                data-bs-dismiss="modal" style="background-color: #f7bb05;">Tiếp tục mua hàng
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'shop:thanh_toan' %}"
+                           class="btn text-white w-100 fw-bold py-2 shadow-sm border-0"
+                           style="background-color: #0b22a1;">Thanh toán ngay</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let qtyInput = document.getElementById('detail-qty-input');
+
+    function tangQtyDetail() {
+        let val = parseInt(qtyInput.value);
+        qtyInput.value = val + 1;
+    }
+
+    function giamQtyDetail() {
+        let val = parseInt(qtyInput.value);
+        if(val > 1) {
+            qtyInput.value = val - 1;
+        }
+    }
+
+    function guiLenGioHang(productId) {
+        let selectedQty = qtyInput.value;
+
+        let formData = new FormData();
+        formData.append('quantity', selectedQty);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch(`/add-to-cart/${productId}/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.status === 'success') {
+                // 1. Cập nhật số tổng lượng hiển thị trên icon Navbar lập tức
+                document.getElementById('cart-badge-count').innerText = data.total_items;
+
+                // 2. Điền thông tin linh kiện vào Popup thông báo mua thành công
+                document.getElementById('popup-name').innerText = data.product_name;
+                document.getElementById('popup-price').innerText = data.product_price;
+                document.getElementById('popup-img').src = data.product_image;
+                document.getElementById('popup-count').innerText = data.total_items;
+
+                // ==================== ĐỒNG BỘ TRỰC TIẾP LÊN KHỐI ẨN MINI-CART ====================
+                let emptyMini = document.getElementById('mini-cart-empty');
+                if (emptyMini) emptyMini.remove();
+
+                let footerMini = document.getElementById('mini-cart-footer');
+                if (footerMini) footerMini.style.display = 'block';
+
+                // Kiểm tra xem sản phẩm này đã tồn tại trong danh sách Mini-cart chưa
+                let miniInput = document.getElementById('mini-qty-' + data.product_id);
+
+                if (miniInput) {
+                    // Nếu ĐÃ CÓ: Ghi đè số lượng mới nhất từ Backend trả về
+                    miniInput.value = data.current_qty;
+                } else {
+                    // Nếu CHƯA CÓ: Tạo và thêm một Row mới bằng DOM Node để không bao giờ bị lỗi hiển thị chữ thô
+                    let container = document.getElementById('mini-cart-list-container');
+                    if (container) {
+                        let newRow = document.createElement('div');
+                        newRow.className = 'row g-2 mini-cart-item align-items-center';
+                        newRow.id = 'mini-row-' + data.product_id;
+
+                        newRow.innerHTML = `
+                            <div class="col-3 text-center">
+                                <img src="${data.product_image}" class="img-fluid rounded border" style="max-height: 60px; object-fit: contain;">
+                            </div>
+                            <div class="col-9">
+                                <div class="fw-bold text-dark text-truncate small mb-1" style="max-width: 230px;">${data.product_name}</div>
+                                <div class="mb-1">
+                                    <a href="javascript:void(0);" class="text-danger small text-decoration-none fw-semibold link-xoa-mini">Xóa</a>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <span class="text-muted small me-2">Số lượng</span>
+                                        <div class="input-group input-group-sm" style="width: 85px;">
+                                            <button class="btn btn-sm btn-outline-secondary btn-qty-mini btn-giam-mini">-</button>
+                                            <input type="text" id="mini-qty-${data.product_id}" class="form-control form-control-sm text-center p-0 bg-white fw-bold text-dark" value="${data.current_qty}" readonly>
+                                            <button class="btn btn-sm btn-outline-secondary btn-qty-mini btn-tang-mini">+</button>
+                                        </div>
+                                    </div>
+                                    <span class="text-danger fw-bold small"><span class="mini-prod-price" id="mini-price-text-${data.product_id}" data-price="${data.product_raw_price}">0</span>đ</span>
+                                </div>
+                            </div>
+                        `;
+
+                        // Gán sự kiện trực tiếp cho các nút bấm trong phần tử mới tạo để tránh lỗi kịch bản
+                        newRow.querySelector('.link-xoa-mini').addEventListener('click', function() {
+                            xoaSanPhamGlobal(data.product_id);
+                        });
+                        newRow.querySelector('.btn-giam-mini').addEventListener('click', function() {
+                            thayDoiSoLuongGlobal(data.product_id, -1);
+                        });
+                        newRow.querySelector('.btn-tang-mini').addEventListener('click', function() {
+                            thayDoiSoLuongGlobal(data.product_id, 1);
+                        });
+
+                        // Chèn phần tử mới lên đầu danh sách hiển thị cửa sổ nhỏ
+                        container.insertBefore(newRow, container.firstChild);
+                    }
+                }
+
+                // Chạy lại hàm tính toán tổng tiền và format dấu chấm của base.html
+                if (typeof capNhatTongTienMini === "function") {
+                    capNhatTongTienMini();
+                }
+                // =========================================================================================
+
+                // 3. Kích hoạt mở Popup "Mua hàng thành công" lên màn hình
+                let myModal = new bootstrap.Modal(document.getElementById('cartSuccessModal'));
+                myModal.show();
+            } else {
+                alert("Có lỗi xảy ra: " + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("Không thể kết nối đến máy chủ.");
+        });
+    }
+</script>
+{% endblock %}

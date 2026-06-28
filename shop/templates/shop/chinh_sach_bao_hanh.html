@@ -1,0 +1,94 @@
+{% extends 'shop/base.html' %}
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm">
+                <h2 class="text-danger fw-bold text-uppercase mb-4">Chính sách bảo hành</h2>
+                <p>Tại <strong>{{ config.title|upper }}</strong>, chúng tôi đặt uy tín và trải nghiệm của khách hàng lên
+                    hàng đầu. Do đặc
+                    thù linh kiện điện tử, chúng tôi áp dụng chính sách bảo hành dựa trên bằng chứng xác thực nhằm bảo
+                    vệ
+                    quyền lợi tối đa cho cả hai bên mà không cần dùng đến tem vật lý.</p>
+
+                <h5 class="fw-bold mt-4">1. Cơ sở bảo hành & Khiếu nại</h5>
+                <p>Để đảm bảo quyền lợi, Quý khách vui lòng quay lại video quá trình bóc hộp và kiểm tra sản phẩm lần
+                    đầu
+                    (trong vòng 03 ngày kể từ khi nhận hàng).</p>
+                <p>Video là căn cứ duy nhất để {{ config.title|upper }} xác nhận lỗi đến từ nhà sản xuất hoặc do quá
+                    trình
+                    vận
+                    chuyển.</p>
+
+                <h5 class="fw-bold mt-4">2. Điều kiện sản phẩm được bảo hành</h5>
+                <ul>
+                    <li>Sản phẩm còn trong thời hạn bảo hành.</li>
+                    <li>Lỗi xác định thuộc về nhà sản xuất.</li>
+                    <li>Sản phẩm không có dấu hiệu can thiệp vật lý (tự ý hàn, tháo lắp, thay đổi cấu trúc mạch).</li>
+                    <li>Sản phẩm không có dấu hiệu hư hỏng do tác động môi trường (ngấm nước, oxy hóa do bảo quản sai
+                        cách,
+                        rơi vỡ).
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">3. Các trường hợp từ chối bảo hành</h5>
+                <ul>
+                    <li>Sản phẩm bị chập, cháy (đặc biệt là các lỗi về nguồn, IC, chân tín hiệu) do sử dụng sai điện áp
+                        hoặc
+                        quá tải công suất.
+                    </li>
+                    <li>Hư hỏng do tác động vật lý: rơi rớt, biến dạng, nứt vỡ hoặc trầy xước nghiêm trọng.</li>
+                    <li>Sản phẩm đã bị can thiệp kỹ thuật bởi bên thứ ba (đã qua sửa chữa hoặc thay đổi linh kiện
+                        gốc).
+                    </li>
+                    <li>Sử dụng sai mục đích hoặc không tuân thủ hướng dẫn kỹ thuật của nhà sản xuất.</li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">4. Hỗ trợ ngoài bảo hành & Chính sách hậu mãi</h5>
+                <p>{{ config.title|upper }} luôn đồng hành cùng quý khách ngay cả khi sản phẩm đã hết hạn bảo hành:</p>
+                <ul>
+                    <li><strong>Hỗ trợ kỹ thuật:</strong> Chúng tôi hỗ trợ kiểm tra, chẩn đoán lỗi và tư vấn giải pháp
+                        sửa
+                        chữa miễn phí.
+                    </li>
+                    <li><strong>Chi phí dịch vụ:</strong> Đối với các lỗi nhẹ có thể khắc phục được, chúng tôi hỗ trợ
+                        công
+                        sửa chữa (miễn phí hoặc phí tượng trưng).
+                    </li>
+                    <li><strong>Ưu đãi mua mới:</strong> Trường hợp sản phẩm hư hỏng nặng không thể sửa chữa, Quý khách
+                        sẽ
+                        được hưởng chính sách giá ưu đãi khi mua mới hoặc thay thế linh kiện tương đương.
+                    </li>
+                </ul>
+
+                <h5 class="fw-bold mt-4">5. Quy trình yêu cầu bảo hành</h5>
+                <p>Để tiết kiệm thời gian cho Quý khách, trước khi gửi sản phẩm về, vui lòng thực hiện quy trình
+                    sau:</p>
+                <ul>
+                    <li><strong>Gửi thông tin:</strong> Nhắn tin kèm video/hình ảnh mô tả lỗi qua Facebook Messenger
+                        hoặc
+                        Zalo OA.
+                    </li>
+                    <li><strong>Chẩn đoán từ xa:</strong> Bộ phận kỹ thuật của {{ config.title|upper }} sẽ tiếp nhận,
+                        kiểm
+                        tra sơ bộ và
+                        hướng dẫn cách khắc phục nhanh tại nhà.
+                    </li>
+                    <li><strong>Gửi bảo hành:</strong> Nếu cần can thiệp sâu, kỹ thuật viên sẽ hướng dẫn cách đóng gói
+                        và
+                        gửi về địa chỉ của cửa hàng.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

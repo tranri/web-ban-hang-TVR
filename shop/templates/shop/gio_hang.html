@@ -1,0 +1,131 @@
+{% extends 'shop/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid px-4 mt-3">
+    <div class="row g-3">
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <div class="col-lg-8 col-md-6 scroll-column">
+            <div class="bg-white p-4 rounded shadow-sm h-100">
+                <h4 class="fw-bold text-dark border-bottom pb-2 mb-4"><i class="bi bi-cart3 text-success"></i> GIỎ HÀNG
+                    CỦA BẠN</h4>
+
+                {% if cart_items %}
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle text-center">
+                        <thead class="table-light">
+                        <tr>
+                            <th class="text-start">Sản phẩm</th>
+                            <th>Giá bán</th>
+                            <th style="width: 150px;">Số lượng</th>
+                            <th>Tổng tiền</th>
+                            <th>Xóa</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for item in cart_items %}
+                        <tr id="cart-row-{{ item.product.id }}">
+                            <td class="text-start fw-bold text-dark">{{ item.product.name }}</td>
+                            <td class="text-danger fw-bold"><span class="prod-price"
+                                                                  data-price="{{ item.product.price }}">{{ item.product.price|intcomma }}</span>
+                                đ
+                            </td>
+                            <td>
+                                <div class="input-group input-group-sm mx-auto" style="max-width: 110px;">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', -1)">-
+                                    </button>
+                                    <input type="text" id="qty-input-{{ item.product.id }}"
+                                           class="form-control text-center fw-bold bg-white text-dark"
+                                           value="{{ item.quantity }}" readonly>
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', 1)">+
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="text-danger fw-bold"><span id="total-item-{{ item.product.id }}"
+                                                                  class="item-total-price">{{ item.total_price|intcomma }}</span>
+                                đ
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="xoaSanPhamPage('{{ item.product.id }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex flex-column align-items-end mt-3 p-3 bg-light rounded border">
+                    <div class="d-flex align-items-center mb-3">
+                        <h5 class="mb-0 me-3 fw-bold text-dark">Tổng cộng tiền thanh toán:</h5>
+                        <h4 class="text-danger fw-bold mb-0">
+                            <span id="cart-grand-total">{{ tong_tien|intcomma }}</span> đ
+                        </h4>
+                    </div>
+
+                    <a href="{% url 'shop:thanh_toan' %}" class="btn btn-success btn-lg fw-bold px-4">
+                        <i class="bi bi-credit-card-2-front"></i> THANH TOÁN
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-bag-x text-muted" style="font-size: 4rem;"></i>
+                    <p class="text-secondary mt-3 fs-5">Giỏ hàng của bạn chưa có sản phẩm nào.</p>
+                    <a href="/" class="btn btn-success fw-bold mt-2 px-4">QUAY LẠI TRANG CHỦ MUA SẮM</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function thayDoiSoLuongPage(pId, change) {
+        // Tác động trực tiếp vào Mini-cart, Mini-cart sẽ tự động xử lý và đồng bộ ngược lại trang lớn
+        let inpMini = document.getElementById(`mini-qty-${pId}`);
+        if(inpMini) {
+            thayDoiSoLuongGlobal(pId, change);
+        } else {
+            // Trường hợp dự phòng khẩn cấp nếu Mini-cart trống hoặc lỗi không tìm thấy phần tử
+            let inp = document.getElementById(`qty-input-${pId}`);
+            if (!inp) return;
+            let newVal = parseInt(inp.value) + change;
+            if(newVal < 1) return;
+            inp.value = newVal;
+
+            // Xử lý tính toán nội bộ trang lớn
+            let mRow = document.getElementById(`cart-row-${pId}`);
+            let price = parseFloat(mRow.querySelector('.prod-price').getAttribute('data-price'));
+            document.getElementById(`total-item-${pId}`).innerText = fmtMoney(price * newVal);
+
+            // Tính tổng tiền lớn
+            let total = 0;
+            document.querySelectorAll('.item-total-price').forEach(el => {
+                total += parseFloat(el.innerText.replace(/\./g, ''));
+            });
+            document.getElementById('cart-grand-total').innerText = fmtMoney(total);
+
+            // Gửi dữ liệu về máy chủ
+            let fd = new FormData(); fd.append('quantity', newVal);
+            fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
+        }
+    }
+
+    function xoaSanPhamPage(pId) {
+        // Thực thi hàm xóa đồng bộ toàn hệ thống từ base.html
+        xoaSanPhamGlobal(pId);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}⚡ Điện Tử TVR - Linh Kiện & Đồ Án Giá Rẻ{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        /* TÌM VÀ THAY THẾ ĐOẠN CŨ BẰNG ĐOẠN NÀY */
+        @media (min-width: 992px) {
+            .scroll-column {
+                position: sticky;
+                top: 85px; /* Điều chỉnh khoảng cách top từ navbar */
+            }
+        }
+        .sidebar-menu .list-group-item { border: none; padding: 10px 12px; font-weight: 500; color: #495057; text-decoration: none; white-space: nowrap; }
+        .sidebar-menu .list-group-item:hover { background-color: #f8f9fa; color: #198754; }
+        .sidebar-heading { background-color: #212529; color: white; padding: 12px 12px; font-weight: bold; font-size: 0.9rem; white-space: nowrap; }
+        .cart-dropdown-wrapper { position: relative; }
+        .mini-cart-dropdown {
+            position: absolute; top: 100%; right: 0; width: 360px;
+            background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1050; display: none; padding: 15px; border: 1px solid #e5e5e5;
+        }
+        .cart-dropdown-wrapper:hover .mini-cart-dropdown { display: block; }
+        .mini-cart-item { border-bottom: 1px solid #f1f1f1; padding-bottom: 12px; margin-bottom: 12px; }
+        .mini-cart-item:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+        .btn-qty-mini { padding: 1px 8px; font-size: 11px; font-weight: bold; }
+        .hover-link:hover { color: #0b22a1 !important; text-decoration: underline !important; }
+        .search-item:hover {
+            background-color: #f8f9fa !important;
+            text-decoration: none;
+        }
+        #search-results {
+    display: none; /* Mặc định ẩn */
+    z-index: 9999 !important; /* Đảm bảo nổi trên cùng */
+    border: 1px solid #ddd;
+    background: white;
+}
+        .brand-animated-color {
+            animation: smoothColorCycle 4s linear infinite;
+            /* Giữ hiệu ứng chuyển đổi màu ổn định */
+            transition: color 0.5s ease;
+        }
+
+        @keyframes smoothColorCycle {
+            0%   { color: #dc3545; } /* Đỏ */
+            25%  { color: #d63384; } /* Hồng */
+            50%  { color: #6f42c1; } /* Tím */
+            75%  { color: #0d6efd; } /* Xanh dương */
+            100% { color: #dc3545; } /* Trở về Đỏ */
+        }
+    </style>
+</head>
+<!-- Thêm d-flex, flex-column, min-vh-100 để footer luôn ở đáy -->
+<body class="bg-light d-flex flex-column min-vh-100">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center me-4" href="/">
+            {% if config.logo %}
+            <img src="{{ config.logo.url }}" alt="Logo"
+                 style="height: 45px; width: auto; margin-right: 10px; object-fit: contain;">
+            {% else %}
+            <i class="bi bi-cpu-fill fs-2 me-2"></i>
+            {% endif %}
+
+            <div class="d-flex flex-column text-start">
+                <span class="fw-bold fs-3 lh-1 mb-1 brand-animated-color">{{ config.title|upper }}</span>
+                <small class="text-white-50 fw-semibold text-uppercase" style="font-size: 10px; letter-spacing: 1px;">Khả
+                    năng là vô hạn</small>
+            </div>
+        </a>
+        <form id="search-form" class="d-flex mx-auto col-md-4 my-2 my-lg-0" action="{% url 'shop:ket_qua_tim_kiem' %}"
+              method="GET" style="position: relative;">
+            <div class="input-group">
+                <input type="text" id="search-input" name="q" class="form-control"
+                       placeholder="Tìm linh kiện bạn cần...">
+                <button class="btn btn-danger" type="submit"><i class="bi bi-search"></i></button>
+            </div>
+            <div id="search-results" class="position-absolute w-100 bg-white shadow-lg rounded mt-1 border"
+                 style="top: 100%; z-index: 1050; display: none; max-height: 400px; overflow-y: auto;">
+            </div>
+        </form>
+
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <ul class="navbar-nav align-items-center gap-3">
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center text-white" href="{% url 'shop:lien_he' %}">
+                        <i class="bi bi-geo-alt-fill text-danger me-2 fs-5"></i>
+                        <span class="small fw-semibold">Thông tin<br>Liên hệ</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center text-white" href="{% url 'shop:tai_lieu' %}">
+                        <i class="bi bi-file-earmark-text-fill text-warning me-2 fs-5"></i>
+                        <span class="small fw-semibold">Góc<br>Tài liệu</span>
+                    </a>
+                </li>
+
+                <li class="nav-item cart-dropdown-wrapper">
+                    <a href="{% url 'shop:gio_hang' %}"
+                       class="btn btn-outline-success position-relative me-3 text-white">
+                        <i class="bi bi-cart3 fs-5 me-1"></i> Giỏ hàng
+                        <span id="cart-badge-count" class="badge rounded-circle bg-danger ms-1">
+                                <script>
+                                    (function() {
+                                        let totalQty = 0;
+                                        {% if request.session.cart %}
+                                            {% for item in request.session.cart.values %}
+                                                totalQty += parseInt("{{ item.quantity }}");
+                                            {% endfor %}
+                                        {% endif %}
+                                        document.write(totalQty);
+                                    })();
+                                </script>
+                            </span>
+                    </a>
+                    <div class="mini-cart-dropdown">
+                        <div id="mini-cart-list-container"
+                             style="max-height: 280px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;">
+                            {% if global_cart_items %}
+                            {% for item in global_cart_items %}
+                            <div class="row g-2 mini-cart-item align-items-center" id="mini-row-{{ item.product.id }}">
+                                <div class="col-3 text-center">
+                                    {% if item.product.image %}
+                                    <img src="{{ item.product.image.url }}" class="img-fluid rounded border"
+                                         style="max-height: 60px; object-fit: contain;">
+                                    {% else %}
+                                    <i class="bi bi-image text-muted fs-3"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="col-9">
+                                    <div class="fw-bold text-dark mb-1">{{ item.product.name }}</div>
+                                    <div class="mb-1">
+                                        <a href="javascript:void(0);"
+                                           onclick="xoaSanPhamGlobal('{{ item.product.id }}')"
+                                           class="text-danger small text-decoration-none fw-semibold">Xóa</a>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <span class="text-muted small me-2">Số lượng</span>
+                                            <div class="input-group input-group-sm" style="width: 85px;">
+                                                <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
+                                                        onclick="thayDoiSoLuongGlobal('{{ item.product.id }}', -1)">-
+                                                </button>
+                                                <input type="text" id="mini-qty-{{ item.product.id }}"
+                                                       class="form-control form-control-sm text-center p-0 bg-white fw-bold text-dark"
+                                                       value="{{ item.quantity }}" readonly>
+                                                <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
+                                                        onclick="thayDoiSoLuongGlobal('{{ item.product.id }}', 1)">+
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <span class="text-danger fw-bold small"><span class="mini-prod-price"
+                                                                                      id="mini-price-text-{{ item.product.id }}"
+                                                                                      data-price="{{ item.product.price }}">0</span>đ</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <div id="mini-cart-empty" class="text-center py-4 text-muted">
+                                <i class="bi bi-cart-x fs-2"></i>
+                                <p class="small mt-2 mb-0">Giỏ hàng trống</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="border-top pt-3 mt-2" id="mini-cart-footer"
+                             style="{% if not global_cart_items %}display: none;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="fw-bold text-dark">Tổng tiền:</span>
+                                <span class="text-danger fw-bold fs-5"><span id="mini-cart-grand-total">0</span>đ</span>
+                            </div>
+                            <a href="{% url 'shop:thanh_toan' %}" class="btn btn-success w-100 fw-bold py-2 shadow-sm">
+                                <i class="bi bi-credit-card-2-front"></i> THANH TOÁN
+                            </a>
+                        </div>
+                    </div>
+                </li>
+
+
+                <li class="nav-item ms-2">
+                    <a href="{% url 'shop:dang_nhap' %}"
+                       class="btn btn-outline-light btn-sm d-flex align-items-center px-3 py-2 rounded-2">
+                        <i class="bi bi-person-circle me-2 fs-5"></i>
+                        <span class="fw-bold" style="font-size: 13px;">Tài khoản</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% block content %}{% endblock %}
+<footer class="bg-white border-top mt-4" style="font-size: 14px; color: #495057;">
+    <!-- Thanh màu đen trên cùng (50px) - Chứa Tên Cửa Hàng màu đỏ -->
+    <div class="bg-dark d-flex align-items-center justify-content-center"
+         style="height: 40px; color: #dc3545; font-size: 28px; font-weight: bold; letter-spacing: 1px;">
+        {{ config.title|upper }}
+    </div>
+
+    <!-- Nội dung chính (Container) -->
+    <div class="container py-3">
+        <div class="row g-3">
+            <!-- Cột 1: Thông tin thương hiệu -->
+            <div class="col-lg-3 col-md-6 text-center">
+                <div class="small lh-lg">
+                    <span class="fw-bold text-dark"
+                          style="font-weight: 700; font-size: 16px;">NHẬN</span><br>
+                    <span class="fw-bold"
+                          style="font-weight: 700; font-size: 16px; color: #0056b3;">THIẾT KẾ & TRIỂN KHAI</span><br>
+                    <span class="fw-bold"
+                          style="font-weight: 700; font-size: 16px; color: #0056b3;">ĐỒ ÁN - DỰ ÁN</span>
+                </div>
+            </div>
+
+            <!-- Cột 2: Thông tin pháp lý -->
+            <div class="col-lg-3 col-md-6 text-start">
+                <h6 class="fw-bold text-uppercase mb-3 text-dark">Thông tin pháp lý</h6>
+                <p class="mb-2">{{ config.hkd_name }}</p>
+                <p class="mb-2">GPĐKKD số: {{ config.registration_number }}</p>
+                <p class="mb-2">Nơi cấp: {{ config.registration_place }}</p>
+            </div>
+
+            <!-- Cột 3: Liên hệ & Giờ làm -->
+            <div class="col-lg-3 col-md-6 text-start">
+                <h6 class="fw-bold text-uppercase mb-3 text-dark">Liên hệ & Giờ làm</h6>
+                <p class="mb-2"><i class="bi bi-geo-alt-fill me-1"></i> {{ config.address }}</p>
+                <p class="mb-2"><i class="bi bi-telephone-fill me-1"></i> {{ config.phone }}</p>
+                <p class="mb-2"><i class="bi bi-clock-fill me-1"></i> {{config.working_time}}</p>
+            </div>
+
+            <!-- Cột 4: Chính sách dịch vụ -->
+            <div class="col-lg-3 col-md-6 text-start">
+                <h6 class="fw-bold text-uppercase mb-3 text-dark">Chính sách dịch vụ</h6>
+                <ul class="list-unstyled d-flex flex-column gap-2">
+                    <li><a href="{% url 'shop:chinh_sach_bao_mat' %}"
+                           class="text-secondary text-decoration-none hover-link">Chính
+                        sách bảo mật</a></li>
+                    <li><a href="{% url 'shop:chinh_sach_doi_tra' %}"
+                           class="text-secondary text-decoration-none hover-link">Chính
+                        sách đổi trả</a></li>
+                    <li><a href="{% url 'shop:chinh_sach_bao_hanh' %}"
+                           class="text-secondary text-decoration-none hover-link">Chính sách bảo hành</a></li>
+                    <li><a href="{% url 'shop:chinh_sach_van_chuyen' %}"
+                           class="text-secondary text-decoration-none hover-link">Chính sách vận chuyển</a></li>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thanh màu đen dưới cùng (50px) chứa Copyright -->
+    <div class="bg-dark text-white d-flex align-items-center justify-content-center"
+         style="height: 40px; font-size: 14px;">
+        Copyright © 2019 – {{ config.title|upper }}
+    </div>
+
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function fmtMoney(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+    function capNhatTongTienMini() {
+        let total = 0; let totalItems = 0;
+        let rows = document.querySelectorAll('[id^="mini-row-"]');
+        rows.forEach(row => {
+            let pId = row.id.replace('mini-row-', '');
+            let p = parseFloat(row.querySelector('.mini-prod-price').getAttribute('data-price'));
+            let q = parseInt(row.querySelector('[id^="mini-qty-"]').value);
+            total += p * q;
+            totalItems += q;
+            let txtPrice = document.getElementById(`mini-price-text-${pId}`);
+            if (txtPrice) { txtPrice.innerText = fmtMoney(p * q); }
+            let mainInp = document.getElementById(`qty-input-${pId}`);
+            if (mainInp) { mainInp.value = q; }
+            let mainTxtPrice = document.getElementById(`total-item-${pId}`);
+            if (mainTxtPrice) { mainTxtPrice.innerText = fmtMoney(p * q); }
+        });
+        let gTotal = document.getElementById('mini-cart-grand-total');
+        if(gTotal) gTotal.innerText = fmtMoney(total);
+        let bCount = document.getElementById('cart-badge-count');
+        if(bCount) bCount.innerText = totalItems;
+        let mainGrandTotal = document.getElementById('cart-grand-total');
+        if(mainGrandTotal) mainGrandTotal.innerText = fmtMoney(total);
+        return { total, totalItems };
+    }
+    document.addEventListener("DOMContentLoaded", function() { capNhatTongTienMini(); });
+    function thayDoiSoLuongGlobal(pId, change) {
+        let inp = document.getElementById(`mini-qty-${pId}`);
+        if (!inp) return;
+        let cur = parseInt(inp.value); let newVal = cur + change;
+        if(newVal < 1) return;
+        inp.value = newVal;
+        capNhatTongTienMini();
+        let fd = new FormData(); fd.append('quantity', newVal);
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
+    }
+    function xoaSanPhamGlobal(pId) {
+        let row = document.getElementById(`mini-row-${pId}`);
+        if(row) row.remove();
+        let mainRow = document.getElementById(`cart-row-${pId}`);
+        if(mainRow) mainRow.remove();
+        let info = capNhatTongTienMini();
+        let fd = new FormData(); fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        fetch(`/remove-from-cart/${pId}/`, { method: 'POST', body: fd }).then(() => {
+            if(info.totalItems === 0) { location.reload(); }
+        });
+    }
+</script>
+<script>
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+
+    searchInput.addEventListener('input', function() {
+        let query = this.value;
+
+        if (query.length < 2) {
+            searchResults.style.display = 'none';
+            return;
+        }
+
+        // Gọi API
+        fetch(`/search-api/?q=${query}`)
+            .then(response => {
+                if (!response.ok) throw new Error('Không tìm thấy API');
+                return response.json();
+            })
+            .then(data => {
+                searchResults.innerHTML = '';
+                if (data.products && data.products.length > 0) {
+                    searchResults.style.display = 'block';
+                    data.products.forEach(product => {
+                        searchResults.innerHTML += `
+                            <a href="${product.url}" class="text-decoration-none text-dark p-2 border-bottom d-flex align-items-center" style="display: flex;">
+                                <img src="${product.image_url}" style="width: 40px; height: 40px; object-fit: contain;" class="me-2">
+                                <div>
+                                    <div class="fw-bold small">${product.name}</div>
+                                    <div class="text-danger small">${product.price}đ</div>
+                                </div>
+                            </a>
+                        `;
+                    });
+                } else {
+                    searchResults.innerHTML = '<div class="p-2 text-muted small">Không tìm thấy sản phẩm.</div>';
+                    searchResults.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Lỗi tìm kiếm:', error);
+            });
+    });
+
+    // Đóng khi click ra ngoài
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.style.display = 'none';
+        }
+    });
+</script>
+</body>
+</html>

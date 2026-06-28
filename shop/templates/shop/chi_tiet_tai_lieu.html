@@ -1,0 +1,35 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}{{ post.title }} - Điện Tử TVR{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="bg-white p-4 rounded shadow-sm">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb" style="font-size: 14px;">
+                <li class="breadcrumb-item"><a href="/" class="text-decoration-none text-dark">Trang chủ</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'shop:tai_lieu' %}" class="text-decoration-none text-dark">Góc tài liệu</a></li>
+                <li class="breadcrumb-item active text-secondary" aria-current="page">Chi tiết</li>
+            </ol>
+        </nav>
+        
+        <h2 class="fw-bold text-dark mt-3 mb-1">{{ post.title }}</h2>
+        <small class="text-muted"><i class="bi bi-clock-history"></i> Cập nhật: {{ post.created_at }}</small>
+        <hr>
+        
+        <div class="fs-6 text-dark my-4" style="line-height: 1.8; white-space: pre-line;">
+            {{ post.content }}
+        </div>
+
+        {% if post.file_url %}
+            <div class="alert alert-success d-flex align-items-center mt-4">
+                <i class="bi bi-download fs-4 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-0">Tải tệp đính kèm dữ liệu liên quan</h6>
+                    <a href="{{ post.file_url }}" target="_blank" class="small text-success fw-bold text-decoration-underline">Click vào đây để tải Sơ đồ mạch/Thư viện code mẫu</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

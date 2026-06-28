@@ -1,0 +1,27 @@
+<div class="card shadow-sm border-0 rounded overflow-hidden sidebar-menu">
+    <div class="sidebar-heading"><i class="bi bi-list-task"></i> DANH MỤC THIẾT BỊ</div>
+    <div class="accordion accordion-flush" id="categoryAccordion">
+        {% for cat in categories %}
+            {% if not cat.parent %}
+                <div class="accordion-item border-bottom">
+                    <h2 class="accordion-header" id="heading-{{ cat.id }}">
+                        <button class="accordion-button collapsed fw-bold text-dark py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ cat.id }}" aria-expanded="false" aria-controls="collapse-{{ cat.id }}" style="font-size: 13px; background-color: #fff;">
+                            <i class="bi bi-folder-fill text-warning me-2"></i> {{ cat.name|upper }}
+                        </button>
+                    </h2>
+                    <div id="collapse-{{ cat.id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ cat.id }}" data-bs-parent="#categoryAccordion">
+                        <div class="list-group list-group-flush bg-light">
+                            {% for child in cat.children.all %}
+                                <a href="/?category={{ child.slug }}" class="list-group-item list-group-item-action py-2 ps-4 bg-transparent text-secondary" style="font-size: 13px;">
+                                    <i class="bi bi-arrow-return-right text-success me-1"></i> {{ child.name }}
+                                </a>
+                            {% empty %}
+                                <small class="text-muted p-2 d-block ps-4">Chưa có danh mục con</small>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>

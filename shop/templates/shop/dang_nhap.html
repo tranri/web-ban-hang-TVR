@@ -1,0 +1,36 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}Đăng Nhập Tài Khoản - Điện Tử TVR{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 p-4 bg-white rounded-3">
+                <div class="text-center mb-4">
+                    <h4 class="fw-bold text-success mb-1">ĐĂNG NHẬP</h4>
+                    <small class="text-muted">Nhập tài khoản Điện Tử TVR của bạn</small>
+                </div>
+                <form>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tài khoản hoặc Email</label>
+                        <input type="text" class="form-control" placeholder="Nhập username hoặc email...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Mật khẩu</label>
+                        <input type="password" class="form-control" placeholder="Nhập mật khẩu...">
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-success fw-bold py-2 shadow-sm">ĐĂNG NHẬP HỆ THỐNG</button>
+                    </div>
+                </form>
+                <div class="text-center mt-3">
+                    <small class="text-muted">Chưa có tài khoản? <a href="#"
+                                                                    class="text-success fw-bold text-decoration-none">Đăng
+                        ký ngay</a></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

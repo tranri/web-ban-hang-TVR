@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -27,7 +26,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -37,7 +35,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'shop', # Thêm dòng này vào
+    'django.contrib.humanize',
+    'shop',  # Thêm dòng này vào
 ]
 
 MIDDLEWARE = [
@@ -59,16 +58,19 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # THÊM DÒNG NÀY (Thay 'shop' bằng tên ứng dụng của bạn nếu khác)
+                'shop.context_processors.global_cart',
+                'shop.context_processors.shop_global_settings',
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = 'core_backend.wsgi.application'
-
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -79,7 +81,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -99,20 +100,30 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
+# Tìm các dòng này trong file settings.py và cập nhật giá trị:
+LANGUAGE_CODE = 'vi'
 
 USE_I18N = True
 
-USE_TZ = True
+# Chuyển giá trị này thành False để Django không ép dùng định dạng quốc tế (dấu phẩy)
+USE_L10N = False
 
+# Thêm dòng này để định dạng phân cách hàng nghìn bằng dấu chấm
+NUMBER_GROUPING = 3
+THOUSAND_SEPARATOR = '.'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+import os
+
+# Đường dẫn URL để truy cập vào ảnh (ví dụ: http://127.0.0.1:8000/media/products/abc.jpg)
+MEDIA_URL = '/media/'
+
+# Thư mục thực tế trên ổ cứng của bạn để lưu file ảnh
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
