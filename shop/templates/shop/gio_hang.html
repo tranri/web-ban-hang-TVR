@@ -20,15 +20,36 @@
                         <tr>
                             <th class="text-start">Sản phẩm</th>
                             <th>Giá bán</th>
-                            <th style="width: 150px;">Số lượng</th>
+                            <th style="width: 160px;">Số lượng</th>
                             <th>Tổng tiền</th>
                             <th>Xóa</th>
                         </tr>
                         </thead>
                         <tbody>
+                        {% block pt %}{% endblock %}
                         {% for item in cart_items %}
                         <tr id="cart-row-{{ item.product.id }}">
-                            <td class="text-start fw-bold text-dark">{{ item.product.name }}</td>
+                            <td class="text-start fw-bold text-dark">
+                                <div class="d-flex align-items-center">
+                                    {% if item.product.image %}
+                                    <a href="{% url 'shop:chi_tiet_san_pham' item.product.slug %}">
+                                        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}"
+                                             class="img-fluid rounded border me-3"
+                                             style="width: 50px; height: 50px; object-fit: contain; min-width: 50px;">
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'shop:chi_tiet_san_pham' item.product.slug %}"
+                                       class="d-flex align-items-center justify-content-center bg-light rounded border me-3 text-muted"
+                                       style="width: 50px; height: 50px; min-width: 50px; text-decoration: none;">
+                                        <i class="bi bi-image fs-4"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{% url 'shop:chi_tiet_san_pham' item.product.slug %}"
+                                       class="text-decoration-none text-dark hover-link">
+                                        <span>{{ item.product.name }}</span>
+                                    </a>
+                                </div>
+                            </td>
                             <td class="text-danger fw-bold"><span class="prod-price"
                                                                   data-price="{{ item.product.price }}">{{ item.product.price|intcomma }}</span>
                                 đ
@@ -36,15 +57,24 @@
                             <td>
                                 <div class="input-group input-group-sm mx-auto" style="max-width: 110px;">
                                     <button class="btn btn-outline-secondary" type="button"
-                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', -1)">-
+                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', -1, {{ item.product.stock|default:0 }})">
+                                        -
                                     </button>
-                                    <input type="text" id="qty-input-{{ item.product.id }}"
-                                           class="form-control text-center fw-bold bg-white text-dark"
-                                           value="{{ item.quantity }}" readonly>
+                                    <input type="number" id="qty-input-{{ item.product.id }}"
+                                           class="form-control text-center fw-bold bg-white text-dark p-0"
+                                           value="{{ item.quantity }}" min="1"
+                                           style="-moz-appearance: textfield;"
+                                           onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
+                                           oninput="xuLyNhapBanPhimPage('{{ item.product.id }}', {{ item.product.stock|default:0 }})"
+                                           onblur="xuLyRongPage('{{ item.product.id }}')">
                                     <button class="btn btn-outline-secondary" type="button"
-                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', 1)">+
+                                            onclick="thayDoiSoLuongPage('{{ item.product.id }}', 1, {{ item.product.stock|default:0 }})">
+                                        +
                                     </button>
                                 </div>
+                                <div id="page-msg-{{ item.product.id }}"
+                                     class="text-danger mt-1 text-start d-block mx-auto"
+                                     style="display:none; font-size: 11px; max-width: 140px; line-height: 1.3;"></div>
                             </td>
                             <td class="text-danger fw-bold"><span id="total-item-{{ item.product.id }}"
                                                                   class="item-total-price">{{ item.total_price|intcomma }}</span>
@@ -90,42 +120,137 @@
     </div>
 </div>
 
+<style>
+    .hover-link:hover {
+        color: #dc3545 !important;
+        text-decoration: underline !important;
+    }
+
+    input[id^="qty-input-"]::-webkit-outer-spin-button,
+    input[id^="qty-input-"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+</style>
+
 <script>
-    function thayDoiSoLuongPage(pId, change) {
-        // Tác động trực tiếp vào Mini-cart, Mini-cart sẽ tự động xử lý và đồng bộ ngược lại trang lớn
+    // 1. HÀM XỬ LÝ NÚT + / -
+    function thayDoiSoLuongPage(pId, change, stockLimit) {
+        let inp = document.getElementById(`qty-input-${pId}`);
+        let msgEl = document.getElementById(`page-msg-${pId}`);
+        if (!inp) return;
+
+        let curVal = parseInt(inp.value) || 0;
+        let newVal = curVal + change;
+
+        if (newVal < 1) return;
+
+        // Xử lý khi nhấn "+" vượt quá tồn kho
+        if (change > 0 && stockLimit && newVal > stockLimit) {
+            if (msgEl) {
+                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " cái.";
+                msgEl.classList.remove('d-none');
+            }
+            return; // Dừng lại, không cho tăng tiếp
+        }
+
+        // Nếu hợp lệ: Cập nhật giá trị và ẨN thông báo
+        if (msgEl) {
+            msgEl.classList.add('d-none');
+        }
+        inp.value = newVal;
+
+        // Cập nhật logic phụ
         let inpMini = document.getElementById(`mini-qty-${pId}`);
-        if(inpMini) {
-            thayDoiSoLuongGlobal(pId, change);
+        if (inpMini) {
+            thayDoiSoLuongGlobal(pId, change, stockLimit);
         } else {
-            // Trường hợp dự phòng khẩn cấp nếu Mini-cart trống hoặc lỗi không tìm thấy phần tử
-            let inp = document.getElementById(`qty-input-${pId}`);
-            if (!inp) return;
-            let newVal = parseInt(inp.value) + change;
-            if(newVal < 1) return;
-            inp.value = newVal;
-
-            // Xử lý tính toán nội bộ trang lớn
-            let mRow = document.getElementById(`cart-row-${pId}`);
-            let price = parseFloat(mRow.querySelector('.prod-price').getAttribute('data-price'));
-            document.getElementById(`total-item-${pId}`).innerText = fmtMoney(price * newVal);
-
-            // Tính tổng tiền lớn
-            let total = 0;
-            document.querySelectorAll('.item-total-price').forEach(el => {
-                total += parseFloat(el.innerText.replace(/\./g, ''));
-            });
-            document.getElementById('cart-grand-total').innerText = fmtMoney(total);
-
-            // Gửi dữ liệu về máy chủ
-            let fd = new FormData(); fd.append('quantity', newVal);
+            capNhatGiaoDienNộiBộTrang(pId, newVal);
+            let fd = new FormData();
+            fd.append('quantity', newVal);
             fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
             fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
         }
     }
 
-    function xoaSanPhamPage(pId) {
-        // Thực thi hàm xóa đồng bộ toàn hệ thống từ base.html
-        xoaSanPhamGlobal(pId);
+    // 2. HÀM XỬ LÝ KHI GÕ PHÍM
+    function xuLyNhapBanPhimPage(pId, stockLimit) {
+        let inp = document.getElementById(`qty-input-${pId}`);
+        let msgEl = document.getElementById(`page-msg-${pId}`);
+        if (!inp) return;
+
+        let val = parseInt(inp.value);
+        if (isNaN(val) || inp.value === '') return;
+
+        if (val < 1) { inp.value = 1; val = 1; }
+
+        // Xử lý khi nhập từ bàn phím vượt quá tồn kho
+        if (stockLimit && val > stockLimit) {
+            inp.value = stockLimit;
+            val = stockLimit;
+            if (msgEl) {
+                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " cái.";
+                msgEl.classList.remove('d-none');
+            }
+        } else {
+            // Nếu trong phạm vi cho phép, ẩn thông báo
+            if (msgEl) msgEl.classList.add('d-none');
+        }
+
+        // Đồng bộ backend
+        let inpMini = document.getElementById(`mini-qty-${pId}`);
+        if (inpMini) {
+            inpMini.value = val;
+            capNhatTongTienMini(pId, stockLimit);
+            let msgMini = document.getElementById(`mini-msg-${pId}`);
+            guiCapNhatGioHangBackend(pId, val, msgMini);
+        } else {
+            capNhatGiaoDienNộiBộTrang(pId, val);
+            let fd = new FormData();
+            fd.append('quantity', val);
+            fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
+        }
     }
+
+    // 3. CÁC HÀM HỖ TRỢ KHÁC
+    function xuLyRongPage(pId) {
+        let inp = document.getElementById(`qty-input-${pId}`);
+        if (!inp) return;
+        if (inp.value === '' || parseInt(inp.value) < 1 || isNaN(parseInt(inp.value))) {
+            inp.value = 1;
+            xuLyNhapBanPhimPage(pId, null);
+        }
+    }
+
+    function capNhatGiaoDienNộiBộTrang(pId, newVal) {
+        let mRow = document.getElementById(`cart-row-${pId}`);
+        if (!mRow) return;
+        let price = parseFloat(mRow.querySelector('.prod-price').getAttribute('data-price'));
+        document.getElementById(`total-item-${pId}`).innerText = fmtMoney(price * newVal);
+        let total = 0;
+        document.querySelectorAll('.item-total-price').forEach(el => {
+            total += parseFloat(el.innerText.replace(/\./g, ''));
+        });
+        document.getElementById('cart-grand-total').innerText = fmtMoney(total);
+    }
+
+    // Kiểm tra trạng thái ban đầu khi tải trang
+    document.addEventListener("DOMContentLoaded", function() {
+        {% for item in cart_items %}
+            let pId = '{{ item.product.id }}';
+            let stock = {{ item.product.stock|default:0 }};
+            let qty = {{ item.quantity }};
+            let msgEl = document.getElementById(`page-msg-${pId}`);
+
+            if (msgEl && stock > 0 && qty > stock) {
+                msgEl.innerText = "Tồn kho tối đa " + stock + " cái.";
+                msgEl.style.display = 'block';
+                msgEl.classList.add('text-danger');
+            }
+        {% endfor %}
+    });
+
+    function xoaSanPhamPage(pId) { xoaSanPhamGlobal(pId); }
 </script>
 {% endblock %}

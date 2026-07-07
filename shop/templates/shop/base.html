@@ -33,11 +33,11 @@
             text-decoration: none;
         }
         #search-results {
-    display: none; /* Mặc định ẩn */
-    z-index: 9999 !important; /* Đảm bảo nổi trên cùng */
-    border: 1px solid #ddd;
-    background: white;
-}
+            display: none; /* Mặc định ẩn */
+            z-index: 9999 !important; /* Đảm bảo nổi trên cùng */
+            border: 1px solid #ddd;
+            background: white;
+        }
         .brand-animated-color {
             animation: smoothColorCycle 4s linear infinite;
             /* Giữ hiệu ứng chuyển đổi màu ổn định */
@@ -50,6 +50,35 @@
             50%  { color: #6f42c1; } /* Tím */
             75%  { color: #0d6efd; } /* Xanh dương */
             100% { color: #dc3545; } /* Trở về Đỏ */
+        }
+        input[id^="mini-qty-"]::-webkit-outer-spin-button,
+        input[id^="mini-qty-"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[id^="mini-qty-"][type=number] {
+            -moz-appearance: textfield;
+        }
+        .hover-link-mini:hover {
+            color: #dc3545 !important; /* Đổi thành màu đỏ Bootstrap (hoặc color: red !important;) */
+            text-decoration: underline !important; /* Giữ lại hiệu ứng gạch chân khi di chuột */
+        }
+        .discount-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #dc3545; /* Màu đỏ */
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .old-price {
+            text-decoration: line-through;
+            color: #6c757d; /* Màu xám */
+            font-size: 0.8rem;
         }
     </style>
 </head>
@@ -124,43 +153,73 @@
                             {% for item in global_cart_items %}
                             <div class="row g-2 mini-cart-item align-items-center" id="mini-row-{{ item.product.id }}">
                                 <div class="col-3 text-center">
-                                    {% if item.product.image %}
-                                    <img src="{{ item.product.image.url }}" class="img-fluid rounded border"
-                                         style="max-height: 60px; object-fit: contain;">
-                                    {% else %}
-                                    <i class="bi bi-image text-muted fs-3"></i>
-                                    {% endif %}
+                                    <a href="{% url 'shop:chi_tiet_san_pham' item.product.slug %}">
+                                        {% if item.product.image %}
+                                        <img src="{{ item.product.image.url }}" class="img-fluid rounded border"
+                                             style="max-height: 60px; object-fit: contain;">
+                                        {% else %}
+                                        <div class="d-flex align-items-center justify-content-center border rounded bg-light"
+                                             style="height: 60px;">
+                                            <i class="bi bi-image text-muted fs-3"></i>
+                                        </div>
+                                        {% endif %}
+                                    </a>
                                 </div>
                                 <div class="col-9">
-                                    <div class="fw-bold text-dark mb-1">{{ item.product.name }}</div>
-                                    <div class="mb-1">
-                                        <a href="javascript:void(0);"
-                                           onclick="xoaSanPhamGlobal('{{ item.product.id }}')"
-                                           class="text-danger small text-decoration-none fw-semibold">Xóa</a>
+                                    <div class="fw-bold mb-1">
+                                        <a href="{% url 'shop:chi_tiet_san_pham' item.product.slug %}"
+                                           class="text-decoration-none text-dark hover-link-mini">
+                                            {{ item.product.name }}
+                                        </a>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center">
-                                            <span class="text-muted small me-2">Số lượng</span>
-                                            <div class="input-group input-group-sm" style="width: 85px;">
-                                                <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
-                                                        onclick="thayDoiSoLuongGlobal('{{ item.product.id }}', -1, {{ item.product.stock }})">
-                                                    -
-                                                </button>
-                                                <input type="text" id="mini-qty-{{ item.product.id }}"
-                                                       class="form-control form-control-sm text-center p-0 bg-white fw-bold text-dark"
-                                                       value="{{ item.quantity }}" readonly>
-                                                <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
-                                                        onclick="thayDoiSoLuongGlobal('{{item.product.id}}', 1, {{item.product.stock}})">
-                                                    +
-                                                </button>
+
+                                    <div class="d-flex justify-content-between align-items-stretch">
+
+                                        <div class="d-flex flex-column justify-content-between gap-2">
+                                            <div>
+                                                <a href="javascript:void(0);"
+                                                   onclick="xoaSanPhamGlobal('{{ item.product.id }}')"
+                                                   class="text-danger small text-decoration-none fw-semibold">Xóa</a>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span class="text-muted small me-2"
+                                                      style="font-size: 12px; white-space: nowrap;">Số lượng</span>
+                                                <div class="input-group input-group-sm" style="width: 85px;">
+                                                    <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
+                                                            onclick="thayDoiSoLuongGlobal('{{ item.product.id }}', -1, {{ item.product.stock }})">
+                                                        -
+                                                    </button>
+                                                    <input type="number" id="mini-qty-{{ item.product.id }}"
+                                                           class="form-control form-control-sm text-center p-0 bg-white fw-bold text-dark"
+                                                           value="{{ item.quantity }}" min="1"
+                                                           onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
+                                                           oninput="xuLyNhapBanPhimMini('{{ item.product.id }}', {{ item.product.stock }})"
+                                                           onblur="xuLyRongMini('{{ item.product.id }}')">
+                                                    <button class="btn btn-sm btn-outline-secondary btn-qty-mini"
+                                                            onclick="thayDoiSoLuongGlobal('{{item.product.id}}', 1, {{item.product.stock}})">
+                                                        +
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                        <span class="text-danger fw-bold small"><span class="mini-prod-price"
-                                                                                      id="mini-price-text-{{ item.product.id }}"
-                                                                                      data-price="{{ item.product.price }}">0</span>đ</span>
+
+                                        <div class="d-flex flex-column justify-content-between align-items-end text-end gap-2 ms-2">
+                                            <span class="text-dark small lh-sm"
+                                                  style="font-size: 12px; white-space: nowrap;">
+                                                 <span class="mini-base-price fw-semibold"
+                                                       id="mini-base-text-{{ item.product.id }}"
+                                                       data-price="{{ item.product.price }}">0</span>đ
+                                            </span>
+                                            <span class="text-danger fw-bold small lh-sm" style="white-space: nowrap;">
+                                                <span class="mini-prod-price" id="mini-price-text-{{ item.product.id }}"
+                                                      data-price="{{ item.product.price }}">0</span>đ
+                                            </span>
+                                        </div>
+
                                     </div>
+
                                     <div id="mini-msg-{{ item.product.id }}" class="text-danger small mt-1"
-                                             style="display:none; font-size: 12px;"></div>
+                                         style="display:none; font-size: 12px;"></div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -183,14 +242,26 @@
                         </div>
                     </div>
                 </li>
-
-
                 <li class="nav-item ms-2">
-                    <a href="{% url 'shop:dang_nhap' %}"
-                       class="btn btn-outline-light btn-sm d-flex align-items-center px-3 py-2 rounded-2">
-                        <i class="bi bi-person-circle me-2 fs-5"></i>
-                        <span class="fw-bold" style="font-size: 13px;">Tài khoản</span>
+                    {% if customer_name %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown">
+                            <i class="fa fa-user"></i> {{ customer_name }}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <!-- THÊM DÒNG NÀY VÀO -->
+                            <li><a class="dropdown-item" href="{% url 'shop:tai_khoan' %}"><i
+                                    class="fa fa-info-circle"></i> Tài khoản</a></li>
+                            <li><a class="dropdown-item" href="{% url 'shop:dang_xuat' %}"><i
+                                    class="fa fa-sign-out"></i> Đăng xuất</a></li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <a href="{% url 'shop:dang_nhap' %}" class="btn btn-outline-light btn-sm">
+                        <i class="fa fa-user"></i> Tài khoản
                     </a>
+                    {% endif %}
                 </li>
             </ul>
         </div>
@@ -271,7 +342,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     function fmtMoney(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
-    function capNhatTongTienMini() {
+    function capNhatTongTienMini(currentProductId = null, currentStockLimit = null) {
         let total = 0; let totalItems = 0;
         let rows = document.querySelectorAll('[id^="mini-row-"]');
         rows.forEach(row => {
@@ -280,10 +351,33 @@
             let q = parseInt(row.querySelector('[id^="mini-qty-"]').value);
             total += p * q;
             totalItems += q;
+
+            let txtBasePrice = document.getElementById(`mini-base-text-${pId}`);
+            if (txtBasePrice) { txtBasePrice.innerText = fmtMoney(p); }
+
             let txtPrice = document.getElementById(`mini-price-text-${pId}`);
             if (txtPrice) { txtPrice.innerText = fmtMoney(p * q); }
+
             let mainInp = document.getElementById(`qty-input-${pId}`);
-            if (mainInp) { mainInp.value = q; }
+            if (mainInp) {
+                mainInp.value = q;
+
+                // GỌI HÀM KIỂM TRA THÔNG BÁO Ở TRANG GIỎ HÀNG LỚN
+                if (typeof kiemTraVaHienThiThongBao === 'function') {
+                    let stockLimit = null;
+                    if (pId === currentProductId) {
+                        stockLimit = currentStockLimit;
+                    } else {
+                        // Tự động tìm stockLimit từ thuộc tính onclick của nút cộng cuối cùng trong dòng mini-cart
+                        let btnPlus = row.querySelector('button[onclick*="thayDoiSoLuongGlobal"]:last-of-type');
+                        if (btnPlus) {
+                            let match = btnPlus.getAttribute('onclick').match(/,\s*(\d+)\s*\)/);
+                            if (match) stockLimit = parseInt(match[1]);
+                        }
+                    }
+                    kiemTraVaHienThiThongBao(pId, stockLimit, q);
+                }
+            }
             let mainTxtPrice = document.getElementById(`total-item-${pId}`);
             if (mainTxtPrice) { mainTxtPrice.innerText = fmtMoney(p * q); }
         });
@@ -297,42 +391,9 @@
     }
     document.addEventListener("DOMContentLoaded", function() { capNhatTongTienMini(); });
 
-    function thayDoiSoLuongGlobal(pId, change, stockLimit) {
-        let inp = document.getElementById(`mini-qty-${pId}`);
-        let msgEl = document.getElementById(`mini-msg-${pId}`); // Lấy thẻ hiển thị lỗi
-        if (!inp) return;
-
-        let cur = parseInt(inp.value);
-        let newVal = cur + change;
-
-        // Reset thông báo lỗi mỗi khi thao tác
-        if (msgEl) msgEl.style.display = 'none';
-
-        if (newVal < 1) return;
-
-        // Kiểm tra giới hạn kho
-        if (stockLimit && newVal > stockLimit) {
-            if (msgEl) {
-                msgEl.innerText = "Chỉ còn " + stockLimit + " SP trong kho.";
-                msgEl.style.display = 'block';
-
-                // Tự động ẩn thông báo sau 3 giây
-                setTimeout(() => {
-                    msgEl.style.display = 'none';
-                }, 3000);
-            }
-            return;
-        }
-
-        inp.value = newVal;
-        capNhatTongTienMini();
-
-        // Đồng bộ với trang chi tiết (nếu có)
-        let cartQtyVal = document.getElementById('cart-qty-val');
-        if (cartQtyVal) cartQtyVal.innerText = newVal;
-
+    function guiCapNhatGioHangBackend(pId, qty, msgEl) {
         let fd = new FormData();
-        fd.append('quantity', newVal);
+        fd.append('quantity', qty);
         fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
         fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd })
@@ -347,13 +408,113 @@
             });
     }
 
+    function thayDoiSoLuongGlobal(pId, change, stockLimit) {
+        let inp = document.getElementById(`mini-qty-${pId}`);
+        let msgEl = document.getElementById(`mini-msg-${pId}`); // Lấy thẻ hiển thị lỗi
+        if (!inp) return;
+
+        let cur = parseInt(inp.value) || 0;
+        let newVal = cur + change;
+
+        // Reset thông báo lỗi mỗi khi thao tác
+        if (msgEl) msgEl.style.display = 'none';
+
+        if (newVal < 1) return;
+
+        // Kiểm tra giới hạn kho
+        if (stockLimit && newVal > stockLimit) {
+            if (msgEl) {
+                msgEl.innerText = "Chỉ còn " + stockLimit + " SP trong kho.";
+                msgEl.style.display = 'block';
+            }
+            return;
+        }
+
+        inp.value = newVal;
+        // Truyền thẳng pId và stockLimit vào hàm cập nhật để kích hoạt logic ẩn/hiện thông báo trang lớn
+        capNhatTongTienMini(pId, stockLimit);
+
+        // Đồng bộ với trang chi tiết (nếu có)
+        let cartQtyVal = document.getElementById('cart-qty-val');
+        if (cartQtyVal) cartQtyVal.innerText = newVal;
+
+        guiCapNhatGioHangBackend(pId, newVal, msgEl);
+    }
+
+    function xuLyNhapBanPhimMini(pId, stockLimit) {
+        let inp = document.getElementById(`mini-qty-${pId}`);
+        let msgEl = document.getElementById(`mini-msg-${pId}`);
+        if (!inp) return;
+
+        let val = parseInt(inp.value);
+
+        if (msgEl) msgEl.style.display = 'none';
+        if (isNaN(val) || inp.value === '') return;
+
+        if (val < 1) {
+            inp.value = 1;
+            val = 1;
+        }
+
+        if (stockLimit && val > stockLimit) {
+            inp.value = stockLimit;
+            val = stockLimit;
+            if (msgEl) {
+                msgEl.innerText = "Chỉ được mua tối đa " + stockLimit + " sản phẩm.";
+                msgEl.style.display = 'block';
+                setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+            }
+        }
+
+        capNhatTongTienMini();
+
+        // Đồng bộ trang chi tiết sản phẩm (nếu đang xem)
+        let cartQtyVal = document.getElementById('cart-qty-val');
+        let currentPageProductIdInput = document.getElementById('current-page-product-id');
+        if (cartQtyVal && currentPageProductIdInput && currentPageProductIdInput.value === pId) {
+            cartQtyVal.innerText = val;
+        }
+
+        guiCapNhatGioHangBackend(pId, val, msgEl);
+    }
+
+    // === ĐOẠN HÀM MỚI 2: Xử lý click chuột ra ngoài nếu xóa trống ô mini input ===
+    function xuLyRongMini(pId) {
+        let inp = document.getElementById(`mini-qty-${pId}`);
+        if (!inp) return;
+
+        if (inp.value === '' || parseInt(inp.value) < 1 || isNaN(parseInt(inp.value))) {
+            inp.value = 1;
+            xuLyNhapBanPhimMini(pId, null);
+        }
+    }
+
     function xoaSanPhamGlobal(pId) {
         let row = document.getElementById(`mini-row-${pId}`);
         if(row) row.remove();
         let mainRow = document.getElementById(`cart-row-${pId}`);
         if(mainRow) mainRow.remove();
+
         let info = capNhatTongTienMini();
-        let fd = new FormData(); fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        // --- ĐOẠN MỚI: ĐỒNG BỘ TRANG CHI TIẾT SẢN PHẨM KHI XÓA ---
+        // Kiểm tra xem trang hiện tại có đang hiển thị thông tin giỏ hàng của chính sản phẩm vừa xóa hay không
+        let currentPageProductIdInput = document.getElementById('current-page-product-id');
+        if (currentPageProductIdInput && currentPageProductIdInput.value === pId) {
+            let cartQtyVal = document.getElementById('cart-qty-val');
+            let cartQtyWrapper = document.getElementById('cart-qty-wrapper');
+
+            if (cartQtyVal) {
+                cartQtyVal.innerText = '0'; // Reset số lượng về 0 trên giao diện chi tiết
+            }
+            if (cartQtyWrapper) {
+                cartQtyWrapper.style.display = 'none'; // Ẩn hẳn cụm chữ ", X sản phẩm trong giỏ hàng" đi
+            }
+        }
+        // ------------------------------------------------------
+
+        let fd = new FormData();
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
         fetch(`/remove-from-cart/${pId}/`, { method: 'POST', body: fd }).then(() => {
             if(info.totalItems === 0) { location.reload(); }
         });

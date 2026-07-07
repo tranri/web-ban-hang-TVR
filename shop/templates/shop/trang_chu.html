@@ -44,8 +44,16 @@
                     <div class="col">
                         <a href="{% url 'shop:chi_tiet_san_pham' item.slug %}"
                            class="text-decoration-none card h-100 border text-center p-2">
-                            <div class="bg-light rounded d-flex align-items-center justify-content-center overflow-hidden"
+                            <div class="bg-light rounded d-flex align-items-center justify-content-center overflow-hidden position-relative"
                                  style="height: 170px;">
+
+                                {% if item.sale_price > item.price %}
+                                <!-- Tính toán % giảm giá bằng widthratio -->
+                                {% if item.discount_percentage > 0 %}
+                                <span class="discount-badge">Giảm {{ item.discount_percentage }}%</span>
+                                {% endif %}
+                                {% endif %}
+
                                 {% if item.image %}
                                 <img src="{{ item.image.url }}" class="img-fluid h-100 object-fit-cover"
                                      alt="{{ item.name }}">
@@ -53,21 +61,32 @@
                                 <i class="bi bi-image text-muted fs-1"></i>
                                 {% endif %}
                             </div>
+
                             <div class="card-body px-1 py-2 text-start">
                                 <h6 class="card-title text-dark fw-bold small mb-2 text-center"
                                     style="height: 55px; overflow: hidden; line-height: 1.3;">
                                     {{ item.name }}
                                 </h6>
 
+                                <!-- THAY ĐỔI: Hiển thị giá theo điều kiện -->
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <p class="card-text text-danger fw-bold mb-0">{{ item.price|intcomma }} đ</p>
+                                    <div class="text-start">
+                                        {% if item.sale_price > item.price %}
+                                        <p class="card-text text-danger fw-bold mb-0" style="font-size: 18px;">
+                                            {{item.price|intcomma}}đ</p>
+                                        <p class="mb-0 old-price">{{item.sale_price|intcomma}}đ</p>
+                                        {% else %}
+                                        <p class="card-text text-danger fw-bold mb-0" style="font-size: 18px;">
+                                            {{item.price|intcomma}}đ</p>
+                                        {% endif %}
+                                    </div>
+
                                     {% if item.stock > 0 %}
                                     <span class="badge bg-success" style="font-size: 0.7rem;">Còn hàng</span>
                                     {% else %}
                                     <span class="badge bg-danger" style="font-size: 0.7rem;">Hết hàng</span>
                                     {% endif %}
                                 </div>
-
                             </div>
                         </a>
                     </div>

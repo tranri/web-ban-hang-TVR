@@ -14,9 +14,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-# Application definition
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -51,7 +48,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                # THÊM DÒNG NÀY (Thay 'shop' bằng tên ứng dụng của bạn nếu khác)
+                'shop.context_processors.customer_info',
                 'shop.context_processors.global_cart',
                 'shop.context_processors.shop_global_settings',
             ],
@@ -60,9 +57,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core_backend.wsgi.application'
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
     'default': {
@@ -116,3 +110,6 @@ MEDIA_URL = '/media/'
 
 # Thư mục thực tế trên ổ cứng của bạn để lưu file ảnh
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+TELEGRAM_BOT_TOKEN = '8807230702:AAFsFeWiRzFO-ywiLrEu2bdAf8Or7JJgaNE'
+TELEGRAM_CHAT_ID = '8690363581'

@@ -11,23 +11,26 @@
                     <h4 class="fw-bold text-success mb-1">ĐĂNG NHẬP</h4>
                     <small class="text-muted">Nhập tài khoản Điện Tử TVR của bạn</small>
                 </div>
-                <form>
+                <form method="POST">
+                    {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Tài khoản hoặc Email</label>
-                        <input type="text" class="form-control" placeholder="Nhập username hoặc email...">
+                        <label class="form-label small fw-bold">Số điện thoại</label>
+                        <input type="text" name="phone" class="form-control" required placeholder="Nhập SĐT...">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Mật khẩu</label>
-                        <input type="password" class="form-control" placeholder="Nhập mật khẩu...">
+                        <input type="password" name="password" class="form-control" required
+                               placeholder="Nhập mật khẩu...">
                     </div>
                     <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-success fw-bold py-2 shadow-sm">ĐĂNG NHẬP HỆ THỐNG</button>
+                        <button type="submit" class="btn btn-success fw-bold py-2 shadow-sm">ĐĂNG NHẬP</button>
                     </div>
                 </form>
                 <div class="text-center mt-3">
-                    <small class="text-muted">Chưa có tài khoản? <a href="#"
-                                                                    class="text-success fw-bold text-decoration-none">Đăng
-                        ký ngay</a></small>
+                    <small class="text-muted">Chưa có tài khoản?
+                        <a href="{% url 'shop:dang_ky' %}" class="text-success fw-bold text-decoration-none">Đăng ký
+                            ngay</a>
+                    </small>
                 </div>
             </div>
         </div>

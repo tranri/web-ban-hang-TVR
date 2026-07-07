@@ -22,4 +22,7 @@ urlpatterns = [
     path('ket-qua-tim-kiem/', views.ket_qua_tim_kiem, name='ket_qua_tim_kiem'),
     path('thanh-toan/', views.thanh_toan, name='thanh_toan'),
     path('xac-nhan-don-hang/', views.xac_nhan_don_hang, name='xac_nhan_don_hang'),
+    path('dang-ky/', views.dang_ky, name='dang_ky'),
+    path('dang-xuat/', views.dang_xuat, name='dang_xuat'),
+    path('tai-khoan/', views.tai_khoan, name='tai_khoan'),
 ]

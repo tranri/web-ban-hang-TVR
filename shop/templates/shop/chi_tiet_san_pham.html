@@ -33,9 +33,21 @@
                             {% endif %}
                         </p>
 
-                        <div class="p-3 bg-light rounded mb-3">
-                            <h4 class="text-danger fw-bold mb-0" id="target-prod-price">{{ product.price|intcomma }}
-                                đ</h4>
+                        <div class="p-3 bg-light rounded mb-3" id="target-prod-price-container">
+                            {% if product.sale_price > product.price %}
+                            <!-- Chỉ chứa nội dung hiển thị, không chứa ID -->
+                            <div class="d-flex align-items-center">
+                                <h4 class="text-danger fw-bold mb-0" data-price="{{ product.price }}">
+                                    {{ product.price|intcomma }} đ
+                                </h4>
+                                <span class="old-price">{{ product.sale_price|intcomma }} đ</span>
+                                <span class="badge bg-danger discount-badge">Giảm {{ product.discount_percentage }}%</span>
+                            </div>
+                            {% else %}
+                            <h4 class="text-danger fw-bold mb-0" data-price="{{ product.price }}">
+                                {{ product.price|intcomma }} đ
+                            </h4>
+                            {% endif %}
                         </div>
 
                         <div class="mb-4">
@@ -46,13 +58,17 @@
                                     <button class="btn btn-outline-secondary fw-bold px-3" type="button"
                                             onclick="giamQtyDetail()">-
                                     </button>
-                                    <input type="text" id="detail-qty-input"
-                                           class="form-control text-center fw-bold bg-white text-dark" value="1"
-                                           readonly>
+                                    <input type="number" id="detail-qty-input"
+                                           class="form-control text-center fw-bold bg-white text-dark"
+                                           value="1" min="1"
+                                           onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
+                                           oninput="kiemTraNhapSoLuong('{{ product.stock }}')"
+                                           onblur="kiemTraRongSoLuong()">
                                     <button class="btn btn-outline-secondary fw-bold px-3" type="button"
                                             onclick="tangQtyDetail('{{ product.stock }}')">+
                                     </button>
                                 </div>
+
                                 <span class="ms-2 small text-muted" id="cart-status-container">
                                     {{ product.stock }} sản phẩm có sẵn
                                     <span id="cart-qty-wrapper" {% if not qty_in_cart %}style="display:none;" {%endif%}>
@@ -71,11 +87,11 @@
 
                         <div class="d-grid gap-2 d-md-flex mt-4">
                             {% if product.stock > 0 %}
-                            <button class="btn btn-danger btn-lg fw-bold px-5 py-2 shadow-sm"
-                                    onclick="guiLenGioHang('{{ product.id }}', '{{ product.stock }}')">
-                                <i class="bi bi-cart-plus-fill me-2"></i> THÊM VÀO GIỎ HÀNG
-                            </button>
                             <button class="btn btn-success btn-lg fw-bold px-4 py-2 shadow-sm"
+                                    onclick="guiLenGioHang('{{ product.id }}', '{{ product.stock }}')">
+                                <i class="bi bi-cart-plus-fill me-2"></i> GIỎ HÀNG
+                            </button>
+                            <button class="btn btn-danger btn-lg fw-bold px-4 py-2 shadow-sm"
                                     onclick="muaNgay('{{ product.id }}', '{{ product.stock }}')">
                                 <i class="bi bi-bag-check-fill me-2"></i> MUA NGAY
                             </button>
@@ -104,28 +120,81 @@
     </div>
 </div>
 
+<div id="cart-success-toast" class="position-fixed top-50 start-50 translate-middle d-none animate-pop-in"
+     style="z-index: 9999;">
+    <div class="d-flex flex-column align-items-center justify-content-center text-white p-4 rounded-4 text-center"
+         style="background: rgba(25, 28, 31, 0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.12); min-width: 300px; max-width: 90%; box-shadow: 0 15px 35px rgba(0,0,0,0.5);">
+
+        <div class="rounded-circle d-flex align-items-center justify-content-center mb-3"
+             style="width: 70px; height: 70px; background-color: #198754; box-shadow: 0 0 20px rgba(25, 135, 84, 0.5);">
+            <i class="bi bi-cart-check-fill text-white" style="font-size: 2.5rem;"></i>
+        </div>
+
+        <p class="mb-1 fw-semibold" style="font-size: 1.1rem; letter-spacing: 0.5px;">
+            Đã thêm vào giỏ hàng!
+        </p>
+
+        <p class="mb-0 small text-white-50" style="font-size: 0.9rem; font-style: italic;">
+            Cảm ơn bạn!
+        </p>
+    </div>
+</div>
+
+<style>
+    @keyframes popInEffect {
+        0% {
+            transform: translate(-50%, -50%) scale(0.8);
+            opacity: 0;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* Chỉ chạy hiệu ứng khi class .d-none bị loại bỏ */
+    .animate-pop-in:not(.d-none) {
+        animation: popInEffect 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    /* Ẩn mũi tên tăng giảm số lượng trên Chrome, Safari, Edge, Opera */
+    #detail-qty-input::-webkit-outer-spin-button,
+    #detail-qty-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    /* Ẩn mũi tên tăng giảm số lượng trên Firefox */
+    #detail-qty-input[type=number] {
+        -moz-appearance: textfield;
+    }
+    .old-price {
+        text-decoration: line-through;
+        color: #6c757d;
+        font-size: 1rem;
+        margin-left: 10px;
+    }
+    .discount-badge {
+        font-size: 0.8rem;
+        margin-left: 10px;
+        vertical-align: middle;
+    }
+</style>
+
 <script>
     let qtyInput = document.getElementById('detail-qty-input');
     let limitMsg = document.getElementById('stock-limit-msg');
 
-    // Thêm tham số qtyInCart nhận từ template
-    // Bỏ tham số qtyInCart ở khai báo hàm
     function tangQtyDetail(maxStock) {
         let val = parseInt(qtyInput.value);
         let stock = parseInt(maxStock);
-
-        // TỰ LẤY GIÁ TRỊ MỚI NHẤT TỪ GIAO DIỆN
-        // Tìm thẻ span chứa số lượng giỏ hàng
         let cartQtyEl = document.getElementById('cart-qty-val');
-        // Nếu tìm thấy thì lấy text, không thấy (giỏ hàng trống) thì gán = 0
         let inCart = cartQtyEl ? parseInt(cartQtyEl.innerText) : 0;
 
-        // Logic kiểm tra mới
         if (val + inCart < stock) {
             qtyInput.value = val + 1;
             limitMsg.classList.add('d-none');
         } else {
-            limitMsg.innerText = "Sản phẩm này trong giỏ hàng của bạn đã đạt mức tồn kho tối đa (" + stock + " cái).";
+            limitMsg.innerText = "Sản phẩm này trong giỏ hàng đã đạt mức tồn kho tối đa (" + stock + " cái).";
             limitMsg.classList.remove('d-none');
         }
     }
@@ -138,16 +207,46 @@
         }
     }
 
+    function kiemTraNhapSoLuong(maxStock) {
+        let stock = parseInt(maxStock);
+        let val = parseInt(qtyInput.value);
+        let cartQtyEl = document.getElementById('cart-qty-val');
+        let inCart = cartQtyEl ? parseInt(cartQtyEl.innerText) : 0;
+
+        if (isNaN(val) || qtyInput.value === '') return;
+
+        if (val < 1) {
+            qtyInput.value = 1;
+            limitMsg.classList.add('d-none');
+            return;
+        }
+
+        if (val + inCart > stock) {
+            let maxAllow = stock - inCart;
+            qtyInput.value = maxAllow > 0 ? maxAllow : 1;
+            limitMsg.innerText = "Sản phẩm này trong giỏ hàng của bạn đã đạt mức tồn kho tối đa (" + stock + " cái).";
+            limitMsg.classList.remove('d-none');
+        } else {
+            limitMsg.classList.add('d-none');
+        }
+    }
+
+    function kiemTraRongSoLuong() {
+        if (qtyInput.value === '' || parseInt(qtyInput.value) < 1 || isNaN(parseInt(qtyInput.value))) {
+            qtyInput.value = 1;
+            limitMsg.classList.add('d-none');
+        }
+    }
+
     function guiLenGioHang(productId, maxStock) {
         let selectedQty = parseInt(qtyInput.value);
         let stock = parseInt(maxStock);
 
-        // LẤY GIÁ TRỊ MỚI NHẤT TỪ GIAO DIỆN
-        // Nếu thẻ cart-qty-val không tồn tại (giỏ hàng trống), coi như bằng 0
-        let cartQtyEl = document.getElementById('cart-qty-val');
-        let inCart = cartQtyEl ? parseInt(cartQtyEl.innerText) : 0;
+        // 1. Lấy đúng ô số lượng của RIÊNG sản phẩm này trong mini-cart
+        let miniQtyInp = document.getElementById(`mini-qty-${productId}`);
+        let inCart = miniQtyInp ? parseInt(miniQtyInp.value) : 0;
 
-        // Kiểm tra: Nếu số lượng chọn + số lượng đã có > tồn kho thì chặn lại
+        // Kiểm tra tồn kho dựa trên số lượng thực tế của sản phẩm này trong giỏ
         if (selectedQty + inCart > stock) {
             limitMsg.innerText = "Sản phẩm này trong giỏ hàng đã đạt mức tồn kho tối đa (" + stock + " cái). Bạn không thể thêm nữa.";
             limitMsg.classList.remove('d-none');
@@ -165,7 +264,49 @@
         .then(response => response.json())
         .then(data => {
             if(data.status === 'success') {
-                location.reload();
+
+                // 2. CẬP NHẬT SỐ TỔNG TRÊN ICON GIỎ HÀNG (BADGE)
+                let cartQtyEl = document.getElementById('cart-badge-count');
+                if (cartQtyEl) {
+                    let currentTotal = parseInt(cartQtyEl.innerText) || 0;
+                    cartQtyEl.innerText = currentTotal + selectedQty;
+                }
+
+                // 2.5 Cập nhật dòng chữ số lượng sản phẩm trong giỏ hàng trên trang chi tiết
+                let pageCartQtyVal = document.getElementById('cart-qty-val');
+                let pageCartQtyWrapper = document.getElementById('cart-qty-wrapper');
+
+                if (pageCartQtyVal) {
+                    let currentInPageCart = parseInt(pageCartQtyVal.innerText) || 0;
+                    pageCartQtyVal.innerText = currentInPageCart + selectedQty;
+                }
+                if (pageCartQtyWrapper) {
+                    pageCartQtyWrapper.style.display = 'inline'; // Hiện dòng chữ
+                }
+
+                // HIỂN THỊ THÔNG BÁO TRONG SUỐT (TOAST) TRƯỚC
+                let toast = document.getElementById('cart-success-toast');
+                if (toast) {
+                    toast.classList.remove('d-none');
+                    setTimeout(() => {
+                        toast.classList.add('d-none');
+                    }, 3000);
+                }
+
+                // 3. ĐỒNG BỘ LẠI DỮ LIỆU MINI-CART
+                if (miniQtyInp) {
+                    miniQtyInp.value = inCart + selectedQty;
+                    if (typeof capNhatTongTienMini === 'function') {
+                        capNhatTongTienMini();
+                    }
+                } else {
+                    // Nếu sản phẩm mới hoặc vừa bị xóa (không thấy ô số lượng mini-cart nữa)
+                    // Đợi 1 giây để khách xem xong thông báo Toast trong suốt rồi mới reload cập nhật giao diện hoàn chỉnh
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                }
+
             } else {
                 alert("Có lỗi xảy ra: " + data.message);
             }

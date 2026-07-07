@@ -31,6 +31,11 @@
 {% endblock %}
 
 {% block content %}
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-danger text-center">{{ message }}</div>
+{% endfor %}
+{% endif %}
 <div class="container my-5">
     <div class="row justify-content-center">
         <div class="col-lg-10">
@@ -45,27 +50,39 @@
                     <div class="bg-white p-4 rounded shadow-sm border h-100">
                         <h5 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-success"></i> Thông tin nhận
                             hàng</h5>
+
+                        <!-- Email -->
                         <div class="mb-3">
-                            <label class="form-label text-muted">Email</label>
-                            <input type="email" name="email" class="form-control" required placeholder="Nhập email...">
+                            <label class="form-label text-muted">Email (Không bắt buộc)</label>
+                            <input type="email" name="email" class="form-control" placeholder="Nhập email..."
+                                   value="{% if current_customer %}{{ current_customer.email }}{% else %}{{ form.email.value|default:'' }}{% endif %}">
                         </div>
+
+                        <!-- Họ Tên -->
                         <div class="mb-3">
-                            <label class="form-label text-muted">Họ và tên</label>
+                            <label class="form-label text-muted">Họ Và Tên (Bắt Buộc)</label>
                             <input type="text" name="full_name" class="form-control" required
-                                   placeholder="Nhập họ tên...">
+                                   placeholder="Nhập họ tên..."
+                                   value="{% if current_customer %}{{ current_customer.full_name }}{% else %}{{ form.full_name.value|default:'' }}{% endif %}">
                         </div>
+
+                        <!-- Số Điện Thoại -->
                         <div class="mb-3">
-                            <label class="form-label text-muted">Số điện thoại</label>
+                            <label class="form-label text-muted">Số Điện Thoại (Bắt Buộc)</label>
                             <input type="tel" name="phone" class="form-control" required
-                                   placeholder="Nhập số điện thoại...">
+                                   placeholder="Nhập số điện thoại..."
+                                   value="{% if current_customer %}{{ current_customer.phone }}{% else %}{{ form.phone.value|default:'' }}{% endif %}">
                         </div>
+
+                        <!-- Địa Chỉ -->
                         <div class="mb-3">
-                            <label class="form-label text-muted">Địa chỉ chi tiết</label>
+                            <label class="form-label text-muted">Địa Chỉ Chi Tiết (Bắt Buộc)</label>
                             <textarea name="address" class="form-control" rows="3" required
-                                      placeholder="Số nhà, đường, phường/xã..."></textarea>
+                                      placeholder="Số nhà, đường, phường/xã...">{% if current_customer %}{{ current_customer.address }}{% else %}{{ form.address.value|default:'' }}{% endif %}</textarea>
                         </div>
+
                         <div class="mb-3">
-                            <label class="form-label text-muted">Ghi chú (Tùy chọn)</label>
+                            <label class="form-label text-muted">Ghi Chú (Không bắt buộc)</label>
                             <textarea name="note" class="form-control" rows="2"
                                       placeholder="Bạn cần chúng tôi chú ý điều gì ..."></textarea>
                         </div>

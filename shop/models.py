@@ -1,4 +1,31 @@
 from django.db import models
+from django.contrib.auth.hashers import make_password, check_password
+
+
+## python manage.py makemigrations
+## python manage.py migrate
+
+
+class Customer(models.Model):
+    full_name = models.CharField(max_length=255, verbose_name="Họ tên")
+    phone = models.CharField(max_length=20, unique=True, verbose_name="Số điện thoại")
+    password = models.CharField(max_length=128, verbose_name="Mật khẩu")  # Sẽ lưu mật khẩu đã băm (hash)
+    created_at = models.DateTimeField(auto_now_add=True)
+    email = models.EmailField(max_length=255, verbose_name="Email", null=True, blank=True)
+    address = models.TextField(verbose_name="Địa chỉ", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Tài Khoản Khách Hàng"
+        verbose_name_plural = "Tài Khoản Khách Hàng"
+
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password)
+
+    def __str__(self):
+        return f"{self.full_name} - {self.phone}"
 
 
 class Category(models.Model):
@@ -28,8 +55,16 @@ class Product(models.Model):
     image = models.ImageField(upload_to="products/%Y/%m/%d", blank=True, null=True, verbose_name="Hình ảnh")
     description = models.TextField(blank=True, verbose_name="Mô tả chi tiết/Thông số")
     datasheet_url = models.URLField(blank=True, verbose_name="Link Tài liệu (Datasheet)")
-    price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá bán (VNĐ)")
-    stock = models.IntegerField(default=0, verbose_name="Số lượng tồn kho")
+
+    price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán (VNĐ)")
+    import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Nhập (VNĐ)")
+    sale_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán Cũ (VNĐ)")
+    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho")
+
+    new_import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, blank=True, null=True,
+                                           verbose_name="Giá Nhập Mới (VNĐ)")
+    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới")
+
     available = models.BooleanField(default=True, verbose_name="Hiển thị/Bán")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Ngày cập nhật")
@@ -41,6 +76,14 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def discount_percentage(self):
+        # Chỉ tính khi giá cũ lớn hơn giá hiện tại và giá cũ > 0
+        if self.sale_price > self.price and self.sale_price > 0:
+            discount = self.sale_price - self.price
+            return int((discount / self.sale_price) * 100)
+        return 0
 
 
 class ShopConfiguration(models.Model):
@@ -109,7 +152,7 @@ class DocumentPost(models.Model):
 
 class Order(models.Model):
     full_name = models.CharField(max_length=255)
-    email = models.EmailField()
+    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20)
     address = models.TextField()
     note = models.TextField(blank=True, null=True)

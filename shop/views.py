@@ -1,98 +1,256 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
-from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem
+from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem, Customer
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum
 from django.urls import reverse
-from django.core.mail import send_mail
+from django.contrib import messages
 import random
+from django.db import transaction
+from .forms import OrderForm, CustomerRegisterForm
+import requests
+import threading
+from django.conf import settings
+from django_ratelimit.decorators import ratelimit
+
+
+def tai_khoan(request):
+    # Kiểm tra xem đã đăng nhập chưa
+    customer_id = request.session.get('customer_id')
+    if not customer_id:
+        return redirect('shop:dang_nhap')
+
+    # Lấy thông tin khách hàng
+    customer = get_object_or_404(Customer, id=customer_id)
+    config = get_shop_config()
+    categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+
+    return render(request, 'shop/tai_khoan.html', {
+        'customer': customer,
+        'config': config,
+        'categories': categories
+    })
+
+
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
+def dang_ky(request):
+    if request.method == 'POST':
+        form = CustomerRegisterForm(request.POST)
+        if form.is_valid():
+            customer = form.save(commit=False)
+            customer.set_password(form.cleaned_data['password'])  # Mã hóa mật khẩu
+            customer.save()
+            messages.success(request, "Đăng ký thành công! Hãy đăng nhập.")
+            return redirect('shop:dang_nhap')
+    else:
+        form = CustomerRegisterForm()
+    return render(request, 'shop/dang_ky.html', {'form': form})
+
+
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
+def dang_nhap(request):
+    config = get_shop_config()  # Lấy cấu hình shop
+    if request.method == 'POST':
+        phone = request.POST.get('phone')
+        password = request.POST.get('password')
+        try:
+            customer = Customer.objects.get(phone=phone)
+            if customer.check_password(password):  # Kiểm tra password đã hash
+                request.session['customer_id'] = customer.id
+                request.session['customer_name'] = customer.full_name
+                return redirect('shop:trang_chu')
+            else:
+                messages.error(request, "Sai mật khẩu!")
+        except Customer.DoesNotExist:
+            messages.error(request, "Số điện thoại chưa được đăng ký!")
+
+    # Render trang với config để tránh lỗi thiếu biến
+    return render(request, 'shop/dang_nhap.html', {'config': config})
+
+
+def dang_xuat(request):
+    if 'customer_id' in request.session:
+        del request.session['customer_id']
+    if 'customer_name' in request.session:
+        del request.session['customer_name']
+
+    return redirect('shop:trang_chu')
 
 
 def thanh_toan(request):
     config = get_shop_config()
     categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
 
+    # Lấy thông tin giỏ hàng
     cart = request.session.get('cart', {})
     cart_items = []
     tong_tien = 0
-    tong_so_luong = 0  # <--- THÊM BIẾN NÀY
+    tong_so_luong = 0
 
     for product_id, item in cart.items():
         try:
             product = Product.objects.get(id=int(product_id))
             item_total = product.price * item['quantity']
             tong_tien += item_total
-
-            # CỘNG DỒN SỐ LƯỢNG
             tong_so_luong += item['quantity']
-
-            cart_items.append({
-                'product': product,
-                'quantity': item['quantity'],
-                'total_price': item_total
-            })
+            cart_items.append({'product': product, 'quantity': item['quantity'], 'total_price': item_total})
         except Product.DoesNotExist:
             continue
+
+    # --- LOGIC XỬ LÝ FORM THANH TOÁN ---
+    # 1. Lấy thông tin khách hàng nếu đã đăng nhập
+    customer_id = request.session.get('customer_id')
+    customer = None
+    if customer_id:
+        customer = Customer.objects.filter(id=customer_id).first()
+
+    # 2. Xử lý logic form
+    if request.method == 'POST':
+        form = OrderForm(request.POST)
+        if form.is_valid():
+            order = form.save(commit=False)
+            if customer:
+                # Nếu đã đăng nhập, có thể lưu thêm customer_id vào đơn hàng nếu model Order có field này
+                # order.customer = customer
+                pass
+            order.save()
+            # Xóa giỏ hàng sau khi đặt thành công
+            request.session['cart'] = {}
+            return redirect('shop:thanh_cong')  # Chuyển hướng đến trang thông báo thành công
+    else:
+        # 3. Đổ dữ liệu vào form (Nếu có đăng nhập thì điền sẵn)
+        initial_data = {}
+        if customer:
+            initial_data = {
+                'full_name': customer.full_name,
+                'phone': customer.phone,
+                'address': customer.address,
+            }
+        form = OrderForm(initial=initial_data)
 
     return render(request, 'shop/thanh_toan.html', {
         'config': config,
         'categories': categories,
         'cart_items': cart_items,
         'tong_tien': tong_tien,
-        'tong_so_luong': tong_so_luong,  # <--- TRUYỀN BIẾN NÀY VÀO TEMPLATE
+        'tong_so_luong': tong_so_luong,
+        'form': form,  # Truyền form vào template
     })
+
+
+def send_telegram_notification(order, order_items):
+    token = settings.TELEGRAM_BOT_TOKEN
+    chat_id = settings.TELEGRAM_CHAT_ID
+
+    # Tạo nội dung thông báo
+    items_text = ""
+    for item in order_items:
+        items_text += f"- {item.product.name} (x{item.quantity}): {item.price:,.0f}đ\n"
+
+    message = (
+        f"🛒 *ĐƠN HÀNG MỚI #{order.id}*\n"
+        f"👤 Khách: {order.full_name}\n"
+        f"📞 SĐT: {order.phone}\n"
+        f"📍 Địa chỉ: {order.address}\n"
+        f"📦 Sản phẩm:\n{items_text}"
+        f"💰 Tổng: *{order.total_price:,.0f}đ*"
+    )
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+
+    try:
+        requests.post(url, data=payload, timeout=5)
+    except Exception as e:
+        print(f"Lỗi gửi Telegram: {e}")
 
 
 def xac_nhan_don_hang(request):
     if request.method == 'POST':
-        config = ShopConfiguration.objects.first()
-        shop_email = config.email if config else 'ritran7395@gmail.com'
-
-        # 1. Lưu thông tin Order
-        order = Order.objects.create(
-            full_name=request.POST.get('full_name'),
-            email=request.POST.get('email'),
-            phone=request.POST.get('phone'),
-            address=request.POST.get('address'),
-            note=request.POST.get('note'),
-            total_price=0  # Tạm tính, sẽ cập nhật sau
-        )
-
-        # 2. Lưu chi tiết sản phẩm (OrderItem)
         cart = request.session.get('cart', {})
-        total = 0
-        order_details_text = "\n--- Chi tiết đơn hàng ---\n"
-        for p_id, item in cart.items():
-            product = Product.objects.get(id=int(p_id))
-            item_total = product.price * item['quantity']
-            total += item_total
-            order_details_text += f"- {product.name}: {item['quantity']} x {product.price:,}đ = {item_total:,}đ\n"
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=item['quantity'],
-                price=product.price
-            )
-        order_details_text += f"-------------------------\nTổng cộng: {total:,}đ"
-        # Cập nhật tổng tiền vào đơn hàng
-        order.total_price = total
-        order.save()
+        if not cart:
+            return redirect('shop:gio_hang')
 
-        # 3. Gửi Email thông báo cho chủ shop
-        send_mail(
-            subject=f'Đơn hàng mới #{order.id}',
-            message=f'Khách hàng {order.full_name} vừa đặt hàng.\n'
-                    f'SĐT: {order.phone}\n'
-                    f'Địa chỉ: {order.address}\n'
-                    f'Ghi chú: {order.note or "Không có"}\n'
-                    f'{order_details_text}',  # Chèn danh sách sản phẩm vào đây
-            from_email='shop@yourdomain.com',
-            recipient_list=[shop_email],
-        )
-        # 4. Xóa giỏ hàng
-        del request.session['cart']
-        return render(request, 'shop/xac_nhan_thanh_cong.html', {'order_id': order.id})
+        # 1. Khởi tạo form với dữ liệu từ POST
+        form = OrderForm(request.POST)
+
+        # 2. Kiểm tra dữ liệu (Validation)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Lưu order nhưng chưa commit vào DB ngay để xử lý total_price
+                    order = form.save(commit=False)
+                    order.total_price = 0
+                    order.save()
+
+                    total_amount = 0
+                    for p_id, item in cart.items():
+                        product = Product.objects.select_for_update().get(id=int(p_id))
+                        if product.stock < item['quantity']:
+                            raise ValueError(f"Sản phẩm {product.name} không đủ số lượng.")
+
+                        product.stock -= item['quantity']
+                        product.save()
+
+                        item_total = product.price * item['quantity']
+                        total_amount += item_total
+                        OrderItem.objects.create(order=order, product=product, quantity=item['quantity'],
+                                                 price=product.price)
+
+                    order.total_price = total_amount
+                    order.save()
+
+                    # Lấy danh sách item để gửi thông báo
+                    order_items = OrderItem.objects.filter(order=order)
+
+                    # GỌI THREAD GỬI TELEGRAM
+                    telegram_thread = threading.Thread(
+                        target=send_telegram_notification,
+                        args=(order, order_items)
+                    )
+                    telegram_thread.start()
+
+                del request.session['cart']
+                return render(request, 'shop/xac_nhan_thanh_cong.html', {'order_id': order.id})
+
+            except Exception as e:
+                messages.error(request, str(e))
+                return redirect('shop:gio_hang')
+        else:
+            config = get_shop_config()
+            categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+
+            # Tính toán lại giỏ hàng cho template
+            cart = request.session.get('cart', {})
+            cart_items = []
+            tong_tien = 0
+            tong_so_luong = 0
+            for product_id, item in cart.items():
+                try:
+                    product = Product.objects.get(id=int(product_id))
+                    item_total = product.price * item['quantity']
+                    tong_tien += item_total
+                    tong_so_luong += item['quantity']
+                    cart_items.append({'product': product, 'quantity': item['quantity'], 'total_price': item_total})
+                except Product.DoesNotExist:
+                    continue
+
+            # Trả về trang thanh toán với form hiện tại (có chứa lỗi)
+            messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
+            return render(request, 'shop/thanh_toan.html', {
+                'config': config,
+                'categories': categories,
+                'cart_items': cart_items,
+                'tong_tien': tong_tien,
+                'tong_so_luong': tong_so_luong,
+                'form': form  # Gửi object form chứa dữ liệu và lỗi sang template
+            })
+
     return redirect('shop:thanh_toan')
 
 
@@ -301,11 +459,6 @@ def gio_hang(request):
         'cart_items': cart_items,
         'tong_tien': tong_tien
     })
-
-
-def dang_nhap(request):
-    config = get_shop_config()
-    return render(request, 'shop/dang_nhap.html', {'config': config})
 
 
 # THÊM MỚI: Hàm xử lý xóa sản phẩm ra khỏi giỏ hàng qua AJAX

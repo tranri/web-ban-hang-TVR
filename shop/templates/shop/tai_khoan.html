@@ -1,0 +1,58 @@
+{% extends 'shop/base.html' %}
+
+{% block content %}
+<div class="container-fluid px-3 mt-2">
+    <div class="row g-3">
+        <!-- Sidebar trái: Danh mục -->
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_categories.html' %}
+        </div>
+
+        <!-- Nội dung chính -->
+        <div class="col-lg-8 col-md-6">
+            <div class="bg-white p-4 rounded shadow-sm min-vh-100">
+                <div class="row">
+                    <!-- Menu Điều hướng Tài khoản (Bên trái nội dung) -->
+                    <div class="col-md-4 border-end">
+                        <h5 class="fw-bold mb-3">TRANG TÀI KHOẢN</h5>
+                        <p class="mb-4">Xin chào, <span class="text-danger fw-bold">{{ customer.full_name }}</span> !
+                        </p>
+                        <ul class="nav flex-column">
+                            <li class="nav-item mb-2">
+                                <a href="{% url 'shop:tai_khoan' %}" class="text-decoration-none text-warning fw-bold">Thông
+                                    tin tài khoản</a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a href="#" class="text-decoration-none text-dark">Đơn hàng của bạn</a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a href="#" class="text-decoration-none text-dark">Đổi mật khẩu</a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a href="#" class="text-decoration-none text-dark">Sổ địa chỉ (1)</a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Chi tiết Thông tin (Bên phải nội dung) -->
+                    <div class="col-md-8">
+                        <h5 class="fw-bold mb-4">THÔNG TIN TÀI KHOẢN</h5>
+                        <div class="d-flex flex-column gap-3">
+                            <p class="m-0"><strong>Họ tên:</strong> {{ customer.full_name }}</p>
+                            <!-- Các trường dưới đây yêu cầu bạn đã thêm vào model.py -->
+                            <p class="m-0"><strong>Email:</strong> {{ customer.email|default:"Chưa cập nhật" }}</p>
+                            <p class="m-0"><strong>Điện thoại:</strong> {{ customer.phone }}</p>
+                            <p class="m-0"><strong>Địa chỉ:</strong> {{ customer.address|default:"Chưa cập nhật" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar phải: Dịch vụ -->
+        <div class="col-lg-2 col-md-3 scroll-column">
+            {% include 'shop/partials/sidebar_services.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}
