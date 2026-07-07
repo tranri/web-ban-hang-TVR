@@ -1,16 +1,13 @@
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-5#v0b04#m$09xmzjg3^tpj2ats4r%blxxxvgky131at%$&+9tx'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+SECRET_KEY = os.getenv('SECRET_KEY')
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = []
 
@@ -103,13 +100,11 @@ THOUSAND_SEPARATOR = '.'
 
 STATIC_URL = 'static/'
 
-import os
-
 # Đường dẫn URL để truy cập vào ảnh (ví dụ: http://127.0.0.1:8000/media/products/abc.jpg)
 MEDIA_URL = '/media/'
 
 # Thư mục thực tế trên ổ cứng của bạn để lưu file ảnh
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-TELEGRAM_BOT_TOKEN = '8807230702:AAFsFeWiRzFO-ywiLrEu2bdAf8Or7JJgaNE'
-TELEGRAM_CHAT_ID = '8690363581'
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
