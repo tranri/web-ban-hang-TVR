@@ -22,6 +22,52 @@ from django.views.decorators.cache import never_cache
 logger = logging.getLogger(__name__)
 
 
+# ✅ IMPROVED - Reusable context builders to reduce duplication
+def get_shop_config():
+    """Get or create shop configuration"""
+    config = ShopConfiguration.objects.first()
+    if not config:
+        config = ShopConfiguration.objects.create()
+    return config
+
+
+def get_base_context(request=None, include_categories=True):
+    """
+    Build common context used in most templates
+    Returns: dict with config, categories, and customer_id
+    """
+    context = {'config': get_shop_config()}
+
+    if include_categories:
+        context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+
+    if request:
+        context['customer_id'] = request.session.get('customer_id')
+
+    return context
+
+
+def get_all_categories_context():
+    """Get all categories (flat list, not hierarchical)"""
+    return {'categories': Category.objects.all()}
+
+
+def get_hierarchical_categories_context():
+    """Get parent categories with prefetched children"""
+    return {'categories': Category.objects.filter(parent__isnull=True).prefetch_related('children')}
+
+
+# ✅ IMPROVED - Helper to build common render context
+def build_render_context(request, template_name, **kwargs):
+    """
+    Helper to reduce boilerplate in view functions
+    Automatically adds config and categories
+    """
+    context = get_base_context(request)
+    context.update(kwargs)
+    return context
+
+
 @never_cache
 @require_http_methods(["GET"])
 def tai_khoan(request):
@@ -44,14 +90,8 @@ def tai_khoan(request):
             messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
             return redirect('shop:dang_nhap')
 
-        config = get_shop_config()
-        categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
-
-        return render(request, 'shop/tai_khoan.html', {
-            'customer': customer,
-            'config': config,
-            'categories': categories
-        })
+        context = build_render_context(request, 'shop/tai_khoan.html', customer=customer)
+        return render(request, 'shop/tai_khoan.html', context)
     except Customer.DoesNotExist:
         logger.warning(f"Account page - customer {customer_id} not found")
         request.session.flush()
@@ -96,8 +136,6 @@ def dang_ky(request):
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def dang_nhap(request):
     """Login with enhanced security and session management"""
-    config = get_shop_config()
-
     if request.method == 'POST':
         from .forms import CustomerLoginForm
         form = CustomerLoginForm(request.POST)
@@ -150,10 +188,9 @@ def dang_nhap(request):
         from .forms import CustomerLoginForm
         form = CustomerLoginForm()
 
-    return render(request, 'shop/dang_nhap.html', {
-        'config': config,
-        'form': form
-    })
+    context = get_base_context(request, include_categories=False)
+    context['form'] = form
+    return render(request, 'shop/dang_nhap.html', context)
 
 
 @never_cache
@@ -185,8 +222,8 @@ def dang_xuat(request):
 
 
 def thanh_toan(request):
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+    # ✅ IMPROVED - Use builder instead of manual context building
+    context = build_render_context(request, 'shop/thanh_toan.html')
 
     # Lấy thông tin giỏ hàng
     cart = request.session.get('cart', {})
@@ -207,11 +244,14 @@ def thanh_toan(request):
                         'address': customer.address} if customer else {}
         form = OrderForm(initial=initial_data)
 
-    return render(request, 'shop/thanh_toan.html', {
-        'config': config, 'categories': categories,
-        'cart_items': cart_items, 'tong_tien': tong_tien,
-        'tong_so_luong': tong_so_luong, 'form': form,
+    context.update({
+        'cart_items': cart_items,
+        'tong_tien': tong_tien,
+        'tong_so_luong': tong_so_luong,
+        'form': form,
     })
+
+    return render(request, 'shop/thanh_toan.html', context)
 
 
 def send_telegram_notification(order, order_items):
@@ -299,28 +339,24 @@ def xac_nhan_don_hang(request):
                 messages.error(request, str(e))
                 return redirect('shop:gio_hang')
         else:
-            config = get_shop_config()
-            categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+            # ✅ IMPROVED - Use builder to avoid duplicate context building
+            context = build_render_context(request, 'shop/thanh_toan.html')
             cart = request.session.get('cart', {})
 
             # Dùng hàm tối ưu để lấy dữ liệu hiển thị lại trang thanh toán
             cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
-            messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
-            return render(request, 'shop/thanh_toan.html', {
-                'config': config, 'categories': categories,
-                'cart_items': cart_items, 'tong_tien': tong_tien,
-                'tong_so_luong': tong_so_luong, 'form': form
+            context.update({
+                'cart_items': cart_items,
+                'tong_tien': tong_tien,
+                'tong_so_luong': tong_so_luong,
+                'form': form
             })
 
+            messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
+            return render(request, 'shop/thanh_toan.html', context)
+
     return redirect('shop:thanh_toan')
-
-
-def get_shop_config():
-    config = ShopConfiguration.objects.first()
-    if not config:
-        config = ShopConfiguration.objects.create()
-    return config
 
 
 def get_top_selling_or_random(target_count=60):
@@ -369,9 +405,10 @@ def get_top_selling_or_random(target_count=60):
 
 
 def trang_chu(request):
-    config = get_shop_config()
-    categories = Category.objects.all()
-    banners = config.banners.all()
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/trang_chu.html', include_categories=False)
+    context['categories'] = Category.objects.all()
+    context['banners'] = context['config'].banners.all()
 
     is_filtered = False
     category_slug = request.GET.get('category')
@@ -382,62 +419,56 @@ def trang_chu(request):
         is_filtered = True
     else:
         # Nếu ở trang chủ mặc định: Hiển thị 60 sản phẩm bán chạy + ngẫu nhiên phối hợp
-        products = get_top_selling_or_random(target_count=60)  # Bạn có thể đổi số này từ 50-100 tùy ý
+        products = get_top_selling_or_random(target_count=60)
 
-    return render(request, 'shop/trang_chu.html', {
-        'config': config,
-        'categories': categories,
+    context.update({
         'products': products,
-        'banners': banners,
         'is_filtered': is_filtered,
     })
 
+    return render(request, 'shop/trang_chu.html', context)
+
 
 def chi_tiet_san_pham(request, slug):
-    config = get_shop_config()
-    categories = Category.objects.all()
-    product = get_object_or_404(Product, slug=slug)
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/chi_tiet_san_pham.html', include_categories=False)
+    context['categories'] = Category.objects.all()
+    context['product'] = get_object_or_404(Product, slug=slug)
 
     # Lấy giỏ hàng từ session
     cart = request.session.get('cart', {})
     # Lấy số lượng đã có trong giỏ (mặc định là 0 nếu chưa có)
     qty_in_cart = 0
-    product_id_str = str(product.id)
+    product_id_str = str(context['product'].id)
     if product_id_str in cart:
         qty_in_cart = cart[product_id_str].get('quantity', 0)
 
-    suggested_products = get_top_selling_or_random(target_count=50)
-
-    return render(request, 'shop/chi_tiet_san_pham.html', {
-        'config': config,
-        'categories': categories,
-        'product': product,
-        'products': suggested_products,
-        'qty_in_cart': qty_in_cart,  # Truyền biến này sang template
+    context.update({
+        'products': get_top_selling_or_random(target_count=50),
+        'qty_in_cart': qty_in_cart,
     })
+
+    return render(request, 'shop/chi_tiet_san_pham.html', context)
 
 
 def lien_he(request):
-    config = get_shop_config()
-    return render(request, 'shop/lien_he.html', {'config': config})
+    # ✅ IMPROVED - Use builder (single line!)
+    return render(request, 'shop/lien_he.html',
+                  build_render_context(request, 'shop/lien_he.html', include_categories=False))
 
 
 def tai_lieu(request):
-    config = get_shop_config()
-    categories = Category.objects.all()  # Bổ sung danh mục cho cột trái
-    posts = DocumentPost.objects.all()
-    return render(request, 'shop/tai_lieu.html', {
-        'config': config, 'categories': categories, 'posts': posts
-    })
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/tai_lieu.html')
+    context['posts'] = DocumentPost.objects.all()
+    return render(request, 'shop/tai_lieu.html', context)
 
 
 def chi_tiet_tai_lieu(request, slug):
-    config = get_shop_config()
-    categories = Category.objects.all()  # Bổ sung danh mục cho cột trái
-    post = get_object_or_404(DocumentPost, slug=slug)
-    return render(request, 'shop/chi_tiet_tai_lieu.html', {
-        'config': config, 'categories': categories, 'post': post
-    })
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/chi_tiet_tai_lieu.html')
+    context['post'] = get_object_or_404(DocumentPost, slug=slug)
+    return render(request, 'shop/chi_tiet_tai_lieu.html', context)
 
 
 @require_http_methods(["POST"])
@@ -503,18 +534,18 @@ def them_vao_gio(request, product_id):
 
 
 def gio_hang(request):
-    config = get_shop_config()
-    categories = Category.objects.all()
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/gio_hang.html')
     cart = request.session.get('cart', {})
 
     cart_items, tong_tien, _ = get_cart_items(cart)
 
-    return render(request, 'shop/gio_hang.html', {
-        'config': config,
-        'categories': categories,
+    context.update({
         'cart_items': cart_items,
         'tong_tien': tong_tien
     })
+
+    return render(request, 'shop/gio_hang.html', context)
 
 
 # THÊM MỚI: Hàm xử lý xóa sản phẩm ra khỏi giỏ hàng qua AJAX
@@ -559,40 +590,28 @@ def cap_nhat_gio(request, product_id):
     return JsonResponse({'status': 'error'}, status=400)
 
 
+# ✅ IMPROVED - Extract common policy page pattern
+def _render_policy_page(request, template_name):
+    """Helper for policy pages - all use same context"""
+    context = build_render_context(request, template_name, include_categories=False)
+    context['categories'] = Category.objects.filter(parent__isnull=True)
+    return render(request, template_name, context)
+
+
 def chinh_sach_van_chuyen(request):
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True)  # Hoặc query danh mục bạn muốn
-    return render(request, 'shop/chinh_sach_van_chuyen.html', {
-        'config': config,
-        'categories': categories
-    })
+    return _render_policy_page(request, 'shop/chinh_sach_van_chuyen.html')
 
 
 def chinh_sach_bao_hanh(request):
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True)  # Hoặc query danh mục bạn muốn
-    return render(request, 'shop/chinh_sach_bao_hanh.html', {
-        'config': config,
-        'categories': categories
-    })
+    return _render_policy_page(request, 'shop/chinh_sach_bao_hanh.html')
 
 
 def chinh_sach_doi_tra(request):
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True)  # Hoặc query danh mục bạn muốn
-    return render(request, 'shop/chinh_sach_doi_tra.html', {
-        'config': config,
-        'categories': categories
-    })
+    return _render_policy_page(request, 'shop/chinh_sach_doi_tra.html')
 
 
 def chinh_sach_bao_mat(request):
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True)  # Hoặc query danh mục bạn muốn
-    return render(request, 'shop/chinh_sach_bao_mat.html', {
-        'config': config,
-        'categories': categories
-    })
+    return _render_policy_page(request, 'shop/chinh_sach_bao_mat.html')
 
 
 def search_api(request):
@@ -616,16 +635,14 @@ def ket_qua_tim_kiem(request):
     query = request.GET.get('q', '')
     products = Product.objects.filter(name__icontains=query) if query else []
 
-    # 1. Truy xuất danh mục cha (để sidebar nhận diện được)
-    # Giả sử bạn có model Category với field 'parent'
-    categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
-
-    return render(request, 'shop/ket_qua_tim_kiem.html', {
+    # ✅ IMPROVED - Use builder
+    context = build_render_context(request, 'shop/ket_qua_tim_kiem.html')
+    context.update({
         'products': products,
         'query': query,
-        'categories': categories,  # <--- BẮT BUỘC CÓ DÒNG NÀY
-        'config': get_shop_config()  # Nếu bạn có hàm lấy config
     })
+
+    return render(request, 'shop/ket_qua_tim_kiem.html', context)
 
 
 def get_cart_items(cart):
