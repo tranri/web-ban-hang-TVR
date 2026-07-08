@@ -68,6 +68,33 @@ def build_render_context(request, template_name, **kwargs):
     return context
 
 
+# ✅ IMPROVED - Helper function to create and manage user session
+def create_user_session(request, customer):
+    """
+    Create a secure session for the authenticated customer
+    Used in both login and registration flows
+    """
+    # 1. Regenerate session ID to prevent session fixation
+    request.session.create()
+
+    # 2. Store customer info in session
+    request.session['customer_id'] = customer.id
+    request.session['customer_name'] = customer.full_name
+    request.session['customer_phone'] = customer.phone
+
+    # 3. Set session expiration (30 minutes by default)
+    request.session.set_expiry(1800)  # 30 minutes
+
+    # 4. Mark as persistent login (optional - user stays logged in)
+    # request.session.set_expiry(604800)  # 7 days
+
+    # 5. Set secure flags
+    request.session['_auth_user_id'] = customer.id
+    request.session['_auth_user_hash'] = customer.password[:10]
+
+    logger.info(f"Session created for customer: {customer.phone}")
+
+
 @never_cache
 @require_http_methods(["GET"])
 def tai_khoan(request):
@@ -103,7 +130,7 @@ def tai_khoan(request):
 @require_http_methods(["GET", "POST"])
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def dang_ky(request):
-    """User registration with enhanced security"""
+    """User registration with enhanced security and auto-login after successful registration"""
     if request.method == 'POST':
         from .forms import CustomerRegisterForm
         form = CustomerRegisterForm(request.POST)
@@ -116,8 +143,12 @@ def dang_ky(request):
                 customer.save()
 
                 logger.info(f"New customer registered: {customer.phone}")
-                messages.success(request, "Đăng ký thành công! Hãy đăng nhập.")
-                return redirect('shop:dang_nhap')
+
+                # ✅ IMPROVED - Automatically log in the customer after successful registration
+                create_user_session(request, customer)
+
+                messages.success(request, f"Đăng ký thành công! Xin chào, {customer.full_name}!")
+                return redirect('shop:trang_chu')
             except Exception as e:
                 logger.error(f"Registration error: {e}")
                 messages.error(request, "Đã xảy ra lỗi. Vui lòng thử lại.")
@@ -149,24 +180,8 @@ def dang_nhap(request):
 
                 # Verify password
                 if customer.check_password(password):
-                    # ✅ SECURE SESSION MANAGEMENT
-                    # 1. Regenerate session ID to prevent session fixation
-                    request.session.create()
-
-                    # 2. Store customer info in session
-                    request.session['customer_id'] = customer.id
-                    request.session['customer_name'] = customer.full_name
-                    request.session['customer_phone'] = customer.phone
-
-                    # 3. Set session expiration (30 minutes by default)
-                    request.session.set_expiry(1800)  # 30 minutes
-
-                    # 4. Mark as persistent login (optional - user stays logged in)
-                    # request.session.set_expiry(604800)  # 7 days
-
-                    # 5. Set secure flags
-                    request.session['_auth_user_id'] = customer.id
-                    request.session['_auth_user_hash'] = customer.password[:10]
+                    # ✅ IMPROVED - Use shared session creation helper
+                    create_user_session(request, customer)
 
                     logger.info(f"Customer logged in: {customer.phone}")
                     messages.success(request, f"Xin chào, {customer.full_name}!")
