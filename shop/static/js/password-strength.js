@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const passwordInput = document.getElementById('id_password');
     const passwordConfirmInput = document.getElementById('id_password_confirm');
     const requirementsContainer = document.getElementById('password-requirements');
+    const matchContainer = document.getElementById('password-match');
 
     if (!passwordInput || !requirementsContainer) {
         return; // Exit if not on registration page
@@ -30,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
             id: 'req-number'
         },
         special: {
-            regex: /[@#$!%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
+            regex: /@#$!%^&*()_+\-=\[\]{};':\"\\\|,.<>\/?/,
             text: 'Ký tự đặc biệt (@, #, $, !, etc.)',
             id: 'req-special'
         },
