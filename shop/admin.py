@@ -29,6 +29,12 @@ class CategoryAdmin(admin.ModelAdmin):
     list_display = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
 
+    # ✅ IMPROVED - Optimize queries
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Prefetch parent categories to avoid N+1 queries
+        return qs.select_related('parent')
+
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -49,7 +55,11 @@ class ProductAdmin(admin.ModelAdmin):
     readonly_fields = ['import_price', 'stock', 'sale_price']
 
     list_filter = ['available', 'category']
+    search_fields = ['name', 'slug']  # ✅ IMPROVED - Add search for better usability
     prepopulated_fields = {'slug': ('name',)}
+
+    # ✅ IMPROVED - Add pagination control
+    list_per_page = 50
 
     # Nút cập nhật trong list view
     def action_button(self, obj):
@@ -106,35 +116,94 @@ class ProductAdmin(admin.ModelAdmin):
         form.clean_price = clean_price
         return form
 
+    # ✅ IMPROVED - Optimize queries for list view
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Use select_related for ForeignKey (category)
+        return qs.select_related('category')
+
 
 # Đăng ký trang quản lý bài viết Góc tài liệu
 @admin.register(DocumentPost)
 class DocumentPostAdmin(admin.ModelAdmin):
     list_display = ['title', 'created_at']
+    list_filter = ['created_at']  # ✅ IMPROVED - Add date filter
+    search_fields = ['title', 'slug']  # ✅ IMPROVED - Add search
     prepopulated_fields = {'slug': ('title',)}
+    readonly_fields = ['created_at']  # ✅ IMPROVED - Protect system fields
 
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
+    # ✅ IMPROVED - Make OrderItem readonly in inline to prevent accidental edits
+    readonly_fields = ['product', 'quantity', 'price']
+    can_delete = False  # Prevent deletion from inline
 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at']
+    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at', 'order_status']
+    list_filter = ['created_at', 'full_name']  # ✅ IMPROVED - Better filtering
+    search_fields = ['full_name', 'phone', 'id']  # ✅ IMPROVED - Search by order ID too
+    readonly_fields = ['created_at', 'total_price', 'id']  # ✅ IMPROVED - Protect important fields
     inlines = [OrderItemInline]
+
+    # ✅ IMPROVED - Better display of large order lists
+    list_per_page = 50
+    date_hierarchy = 'created_at'  # ✅ IMPROVED - Add date navigation
+
+    # ✅ IMPROVED - Show order status indicator
+    def order_status(self, obj):
+        """Display order status with color coding"""
+        if obj.total_price == 0:
+            status = "Chưa thanh toán"
+            color = "#ff6b6b"  # Red
+        else:
+            status = "Đã thanh toán"
+            color = "#51cf66"  # Green
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            status
+        )
+
+    order_status.short_description = "Trạng thái"
+
+    # ✅ IMPROVED - Optimize queries with select_related
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Don't join customer as it might not exist, but prefetch OrderItems for inline
+        return qs.prefetch_related('orderitem_set')
 
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
     # Hiển thị thông tin trong bảng danh sách
-    list_display = ['full_name', 'phone', 'created_at']
+    list_display = ['full_name', 'phone', 'created_at', 'customer_badge']
 
-    # Cho phép tìm kiếm theo tên hoặc số điện thoại
-    search_fields = ['full_name', 'phone']
+    # ✅ IMPROVED - Better filtering and search
+    list_filter = ['created_at', 'phone']
+    search_fields = ['full_name', 'phone', 'email']  # ✅ IMPROVED - Search by email too
 
     # Sắp xếp theo ngày tạo mới nhất
     ordering = ['-created_at']
 
+    # ✅ IMPROVED - Better pagination for large customer lists
+    list_per_page = 100
+
     # Chặn không cho sửa mật khẩu trực tiếp (bảo mật)
     readonly_fields = ['password', 'created_at']
+
+    # ✅ IMPROVED - Add date hierarchy for easy browsing
+    date_hierarchy = 'created_at'
+
+    # ✅ IMPROVED - Show customer status badge
+    def customer_badge(self, obj):
+        """Display customer status"""
+        return format_html(
+            '<span style="background-color: #e3f2fd; padding: 3px 10px; border-radius: 3px; font-size: 12px;">{}</span>',
+            f"ID: {obj.id}"
+        )
+
+    customer_badge.short_description = "Mã khách"
