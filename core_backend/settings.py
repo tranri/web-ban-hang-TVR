@@ -62,8 +62,30 @@ DATABASES = {
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
+# =============== SESSION SECURITY ===============
+
+# Session timeout: 30 minutes of inactivity
+SESSION_COOKIE_AGE = 1800
+
+# Delete session when browser is closed
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Use secure cookies only (HTTPS)
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+
+# Prevent JavaScript access to session cookie
+SESSION_COOKIE_HTTPONLY = True
+
+# Restrict cookie to same-site requests only (CSRF protection)
+SESSION_COOKIE_SAMESITE = 'Strict'
+
+# Use database for session storage (more secure than file-based)
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+# Session key randomization
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
+
+# =============== PASSWORD VALIDATION ===============
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -71,6 +93,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,  # Minimum 8 characters
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -80,10 +105,23 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
+# Password hashing algorithm
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Better security
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
 
-# Tìm các dòng này trong file settings.py và cập nhật giá trị:
+# =============== SECURITY HEADERS ===============
+
+SECURE_HSTS_SECONDS = 31536000  # 1 year (production only)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_SSL_REDIRECT = False  # Set to True with HTTPS
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_SECURITY_POLICY = {
+    "default-src": ("'self'",),
+}
+
 LANGUAGE_CODE = 'vi'
 
 USE_I18N = True
@@ -99,7 +137,10 @@ THOUSAND_SEPARATOR = '.'
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'shop', 'static'),
+]
 # Đường dẫn URL để truy cập vào ảnh (ví dụ: http://127.0.0.1:8000/media/products/abc.jpg)
 MEDIA_URL = '/media/'
 

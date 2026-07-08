@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem, Customer
@@ -6,74 +7,179 @@ from django.utils import timezone
 from django.db.models import Sum
 from django.urls import reverse
 from django.contrib import messages
-import random
+from django.contrib.auth.hashers import make_password
+import random, logging
 from django.db import transaction
 from .forms import OrderForm, CustomerRegisterForm
 import requests
 import threading
 from django.conf import settings
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
+from django.views.decorators.cache import never_cache
+
+logger = logging.getLogger(__name__)
 
 
+@never_cache
+@require_http_methods(["GET"])
 def tai_khoan(request):
-    # Kiểm tra xem đã đăng nhập chưa
+    """Protected account page - check session"""
     customer_id = request.session.get('customer_id')
+
     if not customer_id:
+        messages.warning(request, "Vui lòng đăng nhập để xem tài khoản.")
         return redirect('shop:dang_nhap')
 
-    # Lấy thông tin khách hàng
-    customer = get_object_or_404(Customer, id=customer_id)
-    config = get_shop_config()
-    categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+    try:
+        customer = Customer.objects.get(id=customer_id)
 
-    return render(request, 'shop/tai_khoan.html', {
-        'customer': customer,
-        'config': config,
-        'categories': categories
-    })
+        # ✅ VERIFY SESSION INTEGRITY
+        stored_phone = request.session.get('customer_phone')
+        if stored_phone != customer.phone:
+            # Session data mismatch - potential tampering
+            logger.warning(f"Session integrity check failed for customer {customer_id}")
+            request.session.flush()
+            messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
+            return redirect('shop:dang_nhap')
+
+        config = get_shop_config()
+        categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+
+        return render(request, 'shop/tai_khoan.html', {
+            'customer': customer,
+            'config': config,
+            'categories': categories
+        })
+    except Customer.DoesNotExist:
+        logger.warning(f"Account page - customer {customer_id} not found")
+        request.session.flush()
+        messages.error(request, "Tài khoản không tồn tại.")
+        return redirect('shop:dang_nhap')
 
 
+@never_cache
+@require_http_methods(["GET", "POST"])
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def dang_ky(request):
+    """User registration with enhanced security"""
     if request.method == 'POST':
+        from .forms import CustomerRegisterForm
         form = CustomerRegisterForm(request.POST)
+
         if form.is_valid():
-            customer = form.save(commit=False)
-            customer.set_password(form.cleaned_data['password'])  # Mã hóa mật khẩu
-            customer.save()
-            messages.success(request, "Đăng ký thành công! Hãy đăng nhập.")
-            return redirect('shop:dang_nhap')
+            try:
+                customer = form.save(commit=False)
+                # Hash password using Django's built-in method
+                customer.set_password(form.cleaned_data['password'])
+                customer.save()
+
+                logger.info(f"New customer registered: {customer.phone}")
+                messages.success(request, "Đăng ký thành công! Hãy đăng nhập.")
+                return redirect('shop:dang_nhap')
+            except Exception as e:
+                logger.error(f"Registration error: {e}")
+                messages.error(request, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        else:
+            # Log form errors
+            logger.warning(f"Registration form errors: {form.errors}")
     else:
+        from .forms import CustomerRegisterForm
         form = CustomerRegisterForm()
+
     return render(request, 'shop/dang_ky.html', {'form': form})
 
 
+@never_cache
+@require_http_methods(["GET", "POST"])
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def dang_nhap(request):
-    config = get_shop_config()  # Lấy cấu hình shop
+    """Login with enhanced security and session management"""
+    config = get_shop_config()
+
     if request.method == 'POST':
-        phone = request.POST.get('phone')
-        password = request.POST.get('password')
-        try:
-            customer = Customer.objects.get(phone=phone)
-            if customer.check_password(password):  # Kiểm tra password đã hash
-                request.session['customer_id'] = customer.id
-                request.session['customer_name'] = customer.full_name
-                return redirect('shop:trang_chu')
-            else:
-                messages.error(request, "Sai mật khẩu!")
-        except Customer.DoesNotExist:
-            messages.error(request, "Số điện thoại chưa được đăng ký!")
+        from .forms import CustomerLoginForm
+        form = CustomerLoginForm(request.POST)
 
-    # Render trang với config để tránh lỗi thiếu biến
-    return render(request, 'shop/dang_nhap.html', {'config': config})
+        if form.is_valid():
+            phone = form.cleaned_data['phone']
+            password = form.cleaned_data['password']
+
+            try:
+                customer = Customer.objects.get(phone=phone)
+
+                # Verify password
+                if customer.check_password(password):
+                    # ✅ SECURE SESSION MANAGEMENT
+                    # 1. Regenerate session ID to prevent session fixation
+                    request.session.create()
+
+                    # 2. Store customer info in session
+                    request.session['customer_id'] = customer.id
+                    request.session['customer_name'] = customer.full_name
+                    request.session['customer_phone'] = customer.phone
+
+                    # 3. Set session expiration (30 minutes by default)
+                    request.session.set_expiry(1800)  # 30 minutes
+
+                    # 4. Mark as persistent login (optional - user stays logged in)
+                    # request.session.set_expiry(604800)  # 7 days
+
+                    # 5. Set secure flags
+                    request.session['_auth_user_id'] = customer.id
+                    request.session['_auth_user_hash'] = customer.password[:10]
+
+                    logger.info(f"Customer logged in: {customer.phone}")
+                    messages.success(request, f"Xin chào, {customer.full_name}!")
+                    return redirect('shop:trang_chu')
+                else:
+                    # Log failed attempts
+                    logger.warning(f"Failed login attempt for phone: {phone}")
+                    messages.error(request, "Sai mật khẩu!")
+
+            except Customer.DoesNotExist:
+                logger.warning(f"Login attempt with non-existent phone: {phone}")
+                messages.error(request, "Số điện thoại chưa được đăng ký!")
+            except Exception as e:
+                logger.error(f"Login error: {e}")
+                messages.error(request, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        else:
+            messages.error(request, "Dữ liệu không hợp lệ.")
+    else:
+        from .forms import CustomerLoginForm
+        form = CustomerLoginForm()
+
+    return render(request, 'shop/dang_nhap.html', {
+        'config': config,
+        'form': form
+    })
 
 
+@never_cache
+@require_http_methods(["GET"])
 def dang_xuat(request):
+    """Secure logout - destroy session"""
+    customer_name = request.session.get('customer_name')
+
+    # ✅ SECURE SESSION CLEARING
+    # 1. Delete all session data
     if 'customer_id' in request.session:
         del request.session['customer_id']
     if 'customer_name' in request.session:
         del request.session['customer_name']
+    if 'customer_phone' in request.session:
+        del request.session['customer_phone']
+    if '_auth_user_id' in request.session:
+        del request.session['_auth_user_id']
+    if '_auth_user_hash' in request.session:
+        del request.session['_auth_user_hash']
+
+    # 2. Flush entire session (recommended)
+    request.session.flush()
+
+    logger.info(f"Customer logged out: {customer_name}")
+    messages.success(request, "Đã đăng xuất thành công!")
 
     return redirect('shop:trang_chu')
 
@@ -84,90 +190,60 @@ def thanh_toan(request):
 
     # Lấy thông tin giỏ hàng
     cart = request.session.get('cart', {})
-    cart_items = []
-    tong_tien = 0
-    tong_so_luong = 0
+    cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
-    for product_id, item in cart.items():
-        try:
-            product = Product.objects.get(id=int(product_id))
-            item_total = product.price * item['quantity']
-            tong_tien += item_total
-            tong_so_luong += item['quantity']
-            cart_items.append({'product': product, 'quantity': item['quantity'], 'total_price': item_total})
-        except Product.DoesNotExist:
-            continue
-
-    # --- LOGIC XỬ LÝ FORM THANH TOÁN ---
-    # 1. Lấy thông tin khách hàng nếu đã đăng nhập
     customer_id = request.session.get('customer_id')
-    customer = None
-    if customer_id:
-        customer = Customer.objects.filter(id=customer_id).first()
+    customer = Customer.objects.filter(id=customer_id).first() if customer_id else None
 
-    # 2. Xử lý logic form
     if request.method == 'POST':
         form = OrderForm(request.POST)
         if form.is_valid():
             order = form.save(commit=False)
-            if customer:
-                # Nếu đã đăng nhập, có thể lưu thêm customer_id vào đơn hàng nếu model Order có field này
-                # order.customer = customer
-                pass
             order.save()
-            # Xóa giỏ hàng sau khi đặt thành công
             request.session['cart'] = {}
-            return redirect('shop:thanh_cong')  # Chuyển hướng đến trang thông báo thành công
+            return redirect('shop:thanh_cong')
     else:
-        # 3. Đổ dữ liệu vào form (Nếu có đăng nhập thì điền sẵn)
-        initial_data = {}
-        if customer:
-            initial_data = {
-                'full_name': customer.full_name,
-                'phone': customer.phone,
-                'address': customer.address,
-            }
+        initial_data = {'full_name': customer.full_name, 'phone': customer.phone,
+                        'address': customer.address} if customer else {}
         form = OrderForm(initial=initial_data)
 
     return render(request, 'shop/thanh_toan.html', {
-        'config': config,
-        'categories': categories,
-        'cart_items': cart_items,
-        'tong_tien': tong_tien,
-        'tong_so_luong': tong_so_luong,
-        'form': form,  # Truyền form vào template
+        'config': config, 'categories': categories,
+        'cart_items': cart_items, 'tong_tien': tong_tien,
+        'tong_so_luong': tong_so_luong, 'form': form,
     })
 
 
 def send_telegram_notification(order, order_items):
-    token = settings.TELEGRAM_BOT_TOKEN
-    chat_id = settings.TELEGRAM_CHAT_ID
-
-    # Tạo nội dung thông báo
-    items_text = ""
-    for item in order_items:
-        items_text += f"- {item.product.name} (x{item.quantity}): {item.price:,.0f}đ\n"
-
-    message = (
-        f"🛒 *ĐƠN HÀNG MỚI #{order.id}*\n"
-        f"👤 Khách: {order.full_name}\n"
-        f"📞 SĐT: {order.phone}\n"
-        f"📍 Địa chỉ: {order.address}\n"
-        f"📦 Sản phẩm:\n{items_text}"
-        f"💰 Tổng: *{order.total_price:,.0f}đ*"
-    )
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        'chat_id': chat_id,
-        'text': message,
-        'parse_mode': 'Markdown'
-    }
-
     try:
-        requests.post(url, data=payload, timeout=5)
+        token = settings.TELEGRAM_BOT_TOKEN
+        chat_id = settings.TELEGRAM_CHAT_ID
+
+        if not token or not chat_id:
+            logger.warning("Telegram credentials not configured")
+            return
+
+        items_text = "\n".join(
+            f"- {item.product.name} (x{item.quantity}): {item.price:,.0f}đ"
+            for item in order_items
+        )
+
+        message = f"""🛒 *ĐƠN HÀNG MỚI #{order.id}*
+👤 Khách: {order.full_name}
+📞 SĐT: {order.phone}
+📍 Địa chỉ: {order.address}
+📦 Sản phẩm:
+{items_text}
+💰 Tổng: *{order.total_price:,.0f}đ*"""
+
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        requests.post(url, data={
+            'chat_id': chat_id,
+            'text': message,
+            'parse_mode': 'Markdown'
+        }, timeout=5)
     except Exception as e:
-        print(f"Lỗi gửi Telegram: {e}")
+        logger.error(f"Telegram notification failed: {e}")
 
 
 def xac_nhan_don_hang(request):
@@ -211,7 +287,8 @@ def xac_nhan_don_hang(request):
                     # GỌI THREAD GỬI TELEGRAM
                     telegram_thread = threading.Thread(
                         target=send_telegram_notification,
-                        args=(order, order_items)
+                        args=(order, order_items),
+                        daemon=True
                     )
                     telegram_thread.start()
 
@@ -224,31 +301,16 @@ def xac_nhan_don_hang(request):
         else:
             config = get_shop_config()
             categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
-
-            # Tính toán lại giỏ hàng cho template
             cart = request.session.get('cart', {})
-            cart_items = []
-            tong_tien = 0
-            tong_so_luong = 0
-            for product_id, item in cart.items():
-                try:
-                    product = Product.objects.get(id=int(product_id))
-                    item_total = product.price * item['quantity']
-                    tong_tien += item_total
-                    tong_so_luong += item['quantity']
-                    cart_items.append({'product': product, 'quantity': item['quantity'], 'total_price': item_total})
-                except Product.DoesNotExist:
-                    continue
 
-            # Trả về trang thanh toán với form hiện tại (có chứa lỗi)
+            # Dùng hàm tối ưu để lấy dữ liệu hiển thị lại trang thanh toán
+            cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
+
             messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
             return render(request, 'shop/thanh_toan.html', {
-                'config': config,
-                'categories': categories,
-                'cart_items': cart_items,
-                'tong_tien': tong_tien,
-                'tong_so_luong': tong_so_luong,
-                'form': form  # Gửi object form chứa dữ liệu và lỗi sang template
+                'config': config, 'categories': categories,
+                'cart_items': cart_items, 'tong_tien': tong_tien,
+                'tong_so_luong': tong_so_luong, 'form': form
             })
 
     return redirect('shop:thanh_toan')
@@ -262,52 +324,46 @@ def get_shop_config():
 
 
 def get_top_selling_or_random(target_count=60):
-    """
-    Hàm lấy ra danh sách sản phẩm bán chạy nhất trong 3 tuần.
-    Nếu không đủ số lượng target_count, tự động lấy ngẫu nhiên bù vào.
-    """
-    # Ngưỡng an toàn: Khống chế trong khoảng từ 50 đến 100
-    if target_count < 50: target_count = 50
-    if target_count > 100: target_count = 100
+    target_count = max(50, min(100, target_count))
 
     ba_tuan_truoc = timezone.now() - timedelta(weeks=3)
 
-    # Bước 1: Lấy danh sách sản phẩm bán chạy trong 3 tuần gần đây
-    # (Đoạn này giả định cấu trúc OrderItem, nếu lỗi cấu trúc sẽ tự động bỏ qua nhờ khối try-except)
-    top_products_ids = []
-    try:
-        # Thay thế 'OrderItem' bằng tên Model chi tiết đơn hàng thực tế của bạn nếu có
-        # Ví dụ: OrderItem.objects.filter(order__created_at__gte=ba_tuan_truoc)...
-        from .models import OrderItem
-        top_sales = (
-            OrderItem.objects.filter(created_at__gte=ba_tuan_truoc, product__available=True)
-            .values('product_id')
-            .annotate(total_sold=Sum('quantity'))
-            .order_by('-total_sold')[:target_count]
+    top_products_ids = list(
+        OrderItem.objects.filter(
+            order__created_at__gte=ba_tuan_truoc,
+            product__available=True
         )
-        top_products_ids = [item['product_id'] for item in top_sales]
-    except Exception:
-        # Nếu chưa tạo Model đơn hàng, tạm thời danh sách bán chạy trống để tránh lỗi hệ thống
-        top_products_ids = []
+        .values_list('product_id', flat=True)
+        .annotate(total_sold=Sum('quantity'))
+        .order_by('-total_sold')[:target_count]
+    )
 
-    # Truy vấn lấy các đối tượng sản phẩm bán chạy thực tế
-    products_list = list(Product.objects.filter(id__in=top_products_ids, available=True))
+    products_from_db = list(
+        Product.objects.filter(id__in=top_products_ids, available=True)
+        .select_related('category')
+    )
 
-    # Bước 2: Nếu chưa đủ số lượng quy định, lấy thêm sản phẩm ngẫu nhiên để bù vào
-    current_count = len(products_list)
-    if current_count < target_count:
-        needed_count = target_count - current_count
-        # Lấy danh sách các sản phẩm còn lại mà chưa nằm trong nhóm bán chạy
-        remaining_products = Product.objects.filter(available=True).exclude(id__in=[p.id for p in products_list])
+    product_map = {p.id: p for p in products_from_db}
 
-        remaining_list = list(remaining_products)
-        # Lấy ngẫu nhiên số lượng sản phẩm còn thiếu
-        if len(remaining_list) >= needed_count:
-            random_added = random.sample(remaining_list, needed_count)
-        else:
-            random_added = remaining_list  # Nếu kho không đủ hàng thì lấy hết sạch
+    products_list = [product_map[pid] for pid in top_products_ids if pid in product_map]
 
-        products_list.extend(random_added)
+    needed = target_count - len(products_list)
+    if needed > 0:
+        remaining_ids = list(
+            Product.objects.filter(available=True)
+            .exclude(id__in=top_products_ids)
+            .values_list('id', flat=True)
+        )
+
+        if remaining_ids:
+            # Chọn ngẫu nhiên IDs
+            random_ids = random.sample(remaining_ids, min(needed, len(remaining_ids)))
+            # Fetch thêm và nối vào list
+            random_products = list(
+                Product.objects.filter(id__in=random_ids)
+                .select_related('category')
+            )
+            products_list.extend(random_products)
 
     return products_list
 
@@ -384,52 +440,66 @@ def chi_tiet_tai_lieu(request, slug):
     })
 
 
+@require_http_methods(["POST"])
+@ratelimit(key='ip', rate='10/m', method='POST', block=False)
 def them_vao_gio(request, product_id):
-    if request.method == 'POST':
-        # 1. Lấy sản phẩm để kiểm tra tồn kho
-        product = get_object_or_404(Product, id=product_id)
-        qty = int(request.POST.get('quantity', 1))
-
-        # 2. Lấy giỏ hàng hiện tại
-        cart = request.session.get('cart', {})
-        p_id_str = str(product_id)
-
-        # Tính số lượng hiện có trong giỏ + số lượng muốn thêm
-        current_in_cart = cart[p_id_str]['quantity'] if p_id_str in cart else 0
-        total_requested = current_in_cart + qty
-
-        # 3. KIỂM TRA TỒN KHO (Chốt chặn tại server)
-        if total_requested > product.stock:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Rất tiếc, cửa hàng chỉ còn {product.stock} sản phẩm.'
-            })
-
-        # 4. Nếu hợp lệ thì mới lưu vào giỏ hàng
-        if p_id_str in cart:
-            cart[p_id_str]['quantity'] += qty
-        else:
-            cart[p_id_str] = {
-                'quantity': qty,
-                'price': float(product.price)
-            }
-
-        request.session['cart'] = cart
-
-        # Tính tổng số lượng để cập nhật giao diện
-        tong_so_luong = sum(item['quantity'] for item in cart.values())
-
+    # 0. Kiểm tra Rate Limit (vì block=False nên phải tự kiểm tra)
+    if getattr(request, 'limited', False):
+        logger.warning(f"Rate limit triggered for IP: {request.META.get('REMOTE_ADDR')}")
         return JsonResponse({
-            'status': 'success',
-            'product_id': product.id,
-            'current_qty': cart[p_id_str]['quantity'],
-            'product_name': product.name,
-            'product_price': f"{product.price:,.0f}".replace(",", ".") + "đ",
-            'product_raw_price': float(product.price),
-            'product_image': product.image.url if product.image else '/static/images/no-image.png',
-            'total_items': tong_so_luong
+            'status': 'error',
+            'message': 'Bạn thao tác quá nhanh, vui lòng chờ chút!'
+        }, status=429)
+
+    # 1. Lấy sản phẩm
+    product = get_object_or_404(Product, id=product_id)
+
+    # Lấy quantity từ POST, mặc định là 1 nếu không có
+    try:
+        qty = int(request.POST.get('quantity', 1))
+        if qty < 1: qty = 1
+    except (ValueError, TypeError):
+        qty = 1
+
+    # 2. Lấy giỏ hàng từ session
+    cart = request.session.get('cart', {})
+    p_id_str = str(product_id)
+
+    # 3. KIỂM TRA TỒN KHO
+    current_in_cart = cart[p_id_str]['quantity'] if p_id_str in cart else 0
+    total_requested = current_in_cart + qty
+
+    if total_requested > product.stock:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Rất tiếc, cửa hàng chỉ còn {product.stock} sản phẩm.'
         })
-    return JsonResponse({'status': 'error', 'message': 'Yêu cầu không hợp lệ'}, status=400)
+
+    # 4. Cập nhật giỏ hàng
+    if p_id_str in cart:
+        cart[p_id_str]['quantity'] += qty
+    else:
+        cart[p_id_str] = {
+            'quantity': qty,
+            'price': float(product.price)
+        }
+
+    request.session['cart'] = cart
+    request.session.modified = True  # Quan trọng: Báo cho Django biết session đã thay đổi
+
+    # 5. Tính tổng số lượng hiển thị trên icon giỏ hàng
+    tong_so_luong = sum(item['quantity'] for item in cart.values())
+
+    return JsonResponse({
+        'status': 'success',
+        'product_id': product.id,
+        'current_qty': cart[p_id_str]['quantity'],
+        'product_name': product.name,
+        'product_price': f"{product.price:,.0f}".replace(",", ".") + "đ",
+        'product_raw_price': float(product.price),
+        'product_image': product.image.url if product.image else '/static/images/no-image.png',
+        'total_items': tong_so_luong
+    })
 
 
 def gio_hang(request):
@@ -437,21 +507,7 @@ def gio_hang(request):
     categories = Category.objects.all()
     cart = request.session.get('cart', {})
 
-    cart_items = []
-    tong_tien = 0
-
-    for product_id, item in cart.items():
-        try:
-            product = Product.objects.get(id=int(product_id))
-            item_total = product.price * item['quantity']
-            tong_tien += item_total
-            cart_items.append({
-                'product': product,
-                'quantity': item['quantity'],
-                'total_price': item_total
-            })
-        except Product.DoesNotExist:
-            continue
+    cart_items, tong_tien, _ = get_cart_items(cart)
 
     return render(request, 'shop/gio_hang.html', {
         'config': config,
@@ -556,8 +612,6 @@ def search_api(request):
     return JsonResponse({'products': results})
 
 
-# shop/views.py
-
 def ket_qua_tim_kiem(request):
     query = request.GET.get('q', '')
     products = Product.objects.filter(name__icontains=query) if query else []
@@ -572,3 +626,31 @@ def ket_qua_tim_kiem(request):
         'categories': categories,  # <--- BẮT BUỘC CÓ DÒNG NÀY
         'config': get_shop_config()  # Nếu bạn có hàm lấy config
     })
+
+
+def get_cart_items(cart):
+    if not cart:
+        return [], 0, 0
+
+    product_ids = [int(p_id) for p_id in cart.keys()]
+    # Lấy tất cả sản phẩm trong 1 câu truy vấn
+    products = {p.id: p for p in Product.objects.filter(id__in=product_ids)}
+
+    cart_items = []
+    tong_tien = 0
+    tong_so_luong = 0
+
+    for p_id_str, item in cart.items():
+        product = products.get(int(p_id_str))
+        if product:
+            qty = item['quantity']
+            item_total = product.price * qty
+            tong_tien += item_total
+            tong_so_luong += qty
+            cart_items.append({
+                'product': product,
+                'quantity': qty,
+                'total_price': item_total
+            })
+
+    return cart_items, tong_tien, tong_so_luong

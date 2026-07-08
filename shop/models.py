@@ -1,5 +1,8 @@
 from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.core.cache import cache
 
 
 ## python manage.py makemigrations
@@ -119,6 +122,28 @@ class ShopConfiguration(models.Model):
 
     def __str__(self):
         return self.title
+
+    @staticmethod
+    def get_config():
+        """Get or create shop config with caching"""
+        config = cache.get('shop_config')
+        if config is None:
+            config = ShopConfiguration.objects.first()
+            if not config:
+                config = ShopConfiguration.objects.create()
+            cache.set('shop_config', config, 3600)  # Cache for 1 hour
+        return config
+
+    @staticmethod
+    def clear_cache():
+        """Clear config cache"""
+        cache.delete('shop_config')
+
+
+# Signal to clear cache when ShopConfiguration is updated
+@receiver(post_save, sender=ShopConfiguration)
+def clear_shop_config_cache(sender, instance, **kwargs):
+    ShopConfiguration.clear_cache()
 
 
 class BannerImage(models.Model):

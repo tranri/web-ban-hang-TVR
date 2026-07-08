@@ -238,6 +238,7 @@
     // Kiểm tra trạng thái ban đầu khi tải trang
     document.addEventListener("DOMContentLoaded", function() {
         {% for item in cart_items %}
+        {
             let pId = '{{ item.product.id }}';
             let stock = {{ item.product.stock|default:0 }};
             let qty = {{ item.quantity }};
@@ -248,6 +249,7 @@
                 msgEl.style.display = 'block';
                 msgEl.classList.add('text-danger');
             }
+        }
         {% endfor %}
     });
 

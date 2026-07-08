@@ -1,33 +1,49 @@
-from .models import Product, ShopConfiguration
+from .models import Product, ShopConfiguration, Category
+from django.core.cache import cache
 
 
 def customer_info(request):
-    # Lấy tên khách hàng từ session
     customer_name = request.session.get('customer_name')
     return {'customer_name': customer_name}
 
 
 def global_cart(request):
-    # Xử lý giỏ hàng hiển thị trên Header
+    """Cache cart items to reduce database queries"""
     cart = request.session.get('cart', {})
-    cart_items = []
+    if not cart:
+        return {'global_cart_items': []}
 
+    # Batch fetch all products instead of N+1 queries
+    product_ids = [int(p_id) for p_id in cart.keys()]
+    products_dict = {
+        p.id: p for p in Product.objects.filter(id__in=product_ids)
+    }
+
+    cart_items = []
     for p_id, item in cart.items():
-        try:
-            product = Product.objects.get(id=int(p_id))
+        product = products_dict.get(int(p_id))
+        if product:
             cart_items.append({
                 'product': product,
                 'quantity': item['quantity']
             })
-        except Product.DoesNotExist:
-            continue
 
     return {'global_cart_items': cart_items}
 
 
 def shop_global_settings(request):
-    # Xử lý cấu hình website (Logo, tên shop, địa chỉ...) để dùng ở mọi nơi
-    config = ShopConfiguration.objects.first()
-    if not config:
-        config = ShopConfiguration.objects.create()  # Tạo mặc định nếu chưa có
+    """Get shop configuration with caching"""
+    config = ShopConfiguration.get_config()
     return {'config': config}
+
+
+def categories_list(request):
+    """Cache categories - rarely change"""
+    cache_key = 'shop_categories_tree'
+    categories = cache.get(cache_key)
+
+    if categories is None:
+        categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+        cache.set(cache_key, list(categories), 7200)  # Cache for 2 hours
+
+    return {'categories': categories}
