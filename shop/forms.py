@@ -60,7 +60,8 @@ class CustomerRegisterForm(forms.ModelForm):
             'autocomplete': 'new-password'
         }),
         validators=[validate_password],
-        help_text="Mật khẩu phải có ít nhất 8 ký tự, chứa chữ hoa, chữ thường, số và ký tự đặc biệt"
+        # ✅ IMPROVED - Updated help text to remove uppercase requirement
+        help_text="Mật khẩu phải có ít nhất 8 ký tự, chứa chữ thường, số và ký tự đặc biệt"
     )
 
     password_confirm = forms.CharField(

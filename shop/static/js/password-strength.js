@@ -13,13 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return; // Exit if not on registration page
     }
 
-    // Password requirement checks
+    // ✅ IMPROVED - Password requirement checks (removed uppercase requirement)
     const requirements = {
-        uppercase: {
-            regex: /[A-Z]/,
-            text: 'Chữ hoa (A-Z)',
-            id: 'req-uppercase'
-        },
         lowercase: {
             regex: /[a-z]/,
             text: 'Chữ thường (a-z)',
@@ -31,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             id: 'req-number'
         },
         special: {
-            regex: /[@#$!%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
+            regex: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/,
             text: 'Ký tự đặc biệt (@, #, $, !, etc.)',
             id: 'req-special'
         },
@@ -77,11 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update requirement checks
     function updateRequirements(password) {
         let allMet = true;
-
-        // Check uppercase
-        const hasUppercase = requirements.uppercase.regex.test(password);
-        updateRequirementItem('req-uppercase', hasUppercase);
-        if (!hasUppercase) allMet = false;
 
         // Check lowercase
         const hasLowercase = requirements.lowercase.regex.test(password);
