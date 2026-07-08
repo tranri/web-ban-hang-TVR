@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
             id: 'req-number'
         },
         special: {
-            regex: /@#$!%^&*()_+\-=\[\]{};':\"\\\|,.<>\/?/,
+            regex: /[@#$!%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
             text: 'Ký tự đặc biệt (@, #, $, !, etc.)',
             id: 'req-special'
         },
