@@ -6,13 +6,13 @@
     <div class="row justify-content-center">
         <div class="col-md-5">
             <div class="card shadow-sm p-4">
-                <h4 class="text-center fw-bold text-success mb-4">ĐĂNG KÝ TÀI KHOẢN</h4>
+                <h4 class="text-center fw-bold text-success mb-2">ĐĂNG KÝ TÀI KHOẢN</h4>
                 <form method="POST" novalidate>
                     {% csrf_token %}
 
                     {% for field in form %}
                     {% if field.name != 'website_check' %}
-                    <div class="mb-3">
+                    <div class="mb-1">
                         {{ field.label_tag }}
 
                         <!-- ✅ IMPROVED - Add password visibility toggle for password fields -->
@@ -28,7 +28,7 @@
                         {% endif %}
 
                         {% if field.errors %}
-                        <div class="text-danger small mt-2">
+                        <div class="text-danger small mt-1">
                             {% for error in field.errors %}
                             <i class="fas fa-exclamation-circle"></i> {{ error }}
                             {% endfor %}
@@ -40,7 +40,7 @@
 
                     <!-- Password Requirements Display -->
                     {% if form.password %}
-                    <div id="password-requirements"></div>
+                    <div id="password-requirements" class="mt-2"></div>
                     {% endif %}
 
                     <div class="d-grid mt-4">
@@ -62,6 +62,16 @@
 
 <!-- ✅ IMPROVED - Add password visibility toggle CSS -->
 <style>
+    /* ✅ IMPROVED - Reduce spacing between form fields */
+    form label {
+        font-weight: bold;
+    }
+
+    .form-label {
+        margin-bottom: 0.25rem;
+        font-size: 0.875rem;
+    }
+
     .password-input-wrapper {
         position: relative;
         display: flex;

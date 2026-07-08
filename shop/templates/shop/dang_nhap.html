@@ -19,8 +19,14 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Mật khẩu</label>
-                        <input type="password" name="password" class="form-control" required
-                               placeholder="Nhập mật khẩu...">
+                        <!-- ✅ IMPROVED - Add password visibility toggle for login -->
+                        <div class="password-input-wrapper">
+                            <input type="password" name="password" id="login-password" class="form-control" required
+                                   placeholder="Nhập mật khẩu...">
+                            <button type="button" class="password-toggle-btn" data-target="#login-password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="d-grid mt-4">
                         <button type="submit" class="btn btn-success fw-bold py-2 shadow-sm">ĐĂNG NHẬP</button>
@@ -36,4 +42,85 @@
         </div>
     </div>
 </div>
+
+<!-- Load Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- ✅ IMPROVED - Add password visibility toggle CSS -->
+<style>
+    .password-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .password-input-wrapper input {
+        flex: 1;
+        padding-right: 40px; /* Space for the toggle button */
+    }
+
+    .password-toggle-btn {
+        position: absolute;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 5px 8px;
+        transition: all 0.2s ease;
+        z-index: 10;
+    }
+
+    .password-toggle-btn:hover {
+        color: #28a745;
+        transform: scale(1.1);
+    }
+
+    .password-toggle-btn:active {
+        transform: scale(0.95);
+    }
+
+    .password-toggle-btn i {
+        display: block;
+    }
+</style>
+
+<!-- ✅ IMPROVED - Add password visibility toggle JS -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get all password toggle buttons
+        const toggleButtons = document.querySelectorAll('.password-toggle-btn');
+
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Get the target password input field
+                const targetSelector = this.getAttribute('data-target');
+                const passwordInput = document.querySelector(targetSelector);
+
+                if (!passwordInput) return;
+
+                // Toggle password visibility
+                const isPassword = passwordInput.type === 'password';
+                passwordInput.type = isPassword ? 'text' : 'password';
+
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (isPassword) {
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+
+                // Add visual feedback
+                this.classList.toggle('active');
+            });
+        });
+    });
+</script>
+
 {% endblock %}
