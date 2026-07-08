@@ -99,7 +99,10 @@ THOUSAND_SEPARATOR = '.'
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'shop', 'static'),
+]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Đường dẫn URL để truy cập vào ảnh (ví dụ: http://127.0.0.1:8000/media/products/abc.jpg)
 MEDIA_URL = '/media/'
 
