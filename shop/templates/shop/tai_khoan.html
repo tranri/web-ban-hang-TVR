@@ -18,36 +18,233 @@
                                 class="text-danger fw-bold">{{ customer.full_name }}</span> !
                         </p>
                         <ul class="nav flex-column fw-bold">
+                            <!-- ✅ IMPROVED - Tab navigation with active state -->
                             <li class="nav-item mb-2">
-                                <a href="{% url 'shop:tai_khoan' %}" class="text-decoration-none text-warning">Thông
-                                    tin tài khoản</a>
+                                <a href="{% url 'shop:tai_khoan' %}?tab=info"
+                                   class="text-decoration-none {% if active_tab == 'info' %}text-warning{% else %}text-dark{% endif %}">
+                                    <i class="fas fa-user-circle me-2"></i>Thông tin tài khoản
+                                </a>
                             </li>
                             <li class="nav-item mb-2">
-                                <a href="#" class="text-decoration-none text-dark">Đơn hàng của bạn</a>
+                                <a href="{% url 'shop:tai_khoan' %}?tab=orders"
+                                   class="text-decoration-none {% if active_tab == 'orders' %}text-warning{% else %}text-dark{% endif %}">
+                                    <i class="fas fa-shopping-bag me-2"></i>Đơn hàng của bạn
+                                </a>
                             </li>
                             <li class="nav-item mb-2">
-                                <a href="#" class="text-decoration-none text-dark">Đổi mật khẩu</a>
+                                <a href="{% url 'shop:tai_khoan' %}?tab=password"
+                                   class="text-decoration-none {% if active_tab == 'password' %}text-warning{% else %}text-dark{% endif %}">
+                                    <i class="fas fa-lock me-2"></i>Đổi mật khẩu
+                                </a>
                             </li>
                         </ul>
                     </div>
 
                     <!-- Chi tiết Thông tin (Bên phải nội dung) -->
                     <div class="col-md-8">
-                        <h5 class="fw-bold mb-4">THÔNG TIN TÀI KHOẢN</h5>
+                        <!-- ✅ IMPROVED - Tab 1: Account Information -->
+                        {% if active_tab == 'info' %}
+                        <h5 class="fw-bold mb-4">
+                            <i class="fas fa-user-circle text-warning me-2"></i>THÔNG TIN TÀI KHOẢN
+                        </h5>
                         <div class="d-flex flex-column gap-3">
-                            <p class="m-0"><strong>Họ tên:</strong> {{ customer.full_name }}</p>
-                            <p class="m-0"><strong>Email:</strong> {{ customer.email|default:"Chưa cập nhật" }}</p>
-                            <p class="m-0"><strong>Điện thoại:</strong> {{ customer.phone }}</p>
+                            <div class="p-3 bg-light rounded">
+                                <p class="m-0"><strong>Họ tên:</strong> {{ customer.full_name }}</p>
+                            </div>
+                            <div class="p-3 bg-light rounded">
+                                <p class="m-0"><strong>Email:</strong> {{ customer.email|default:"Chưa cập nhật" }}</p>
+                            </div>
+                            <div class="p-3 bg-light rounded">
+                                <p class="m-0"><strong>Điện thoại:</strong> {{ customer.phone }}</p>
+                            </div>
                             <form method="POST" class="mt-2">
                                 {% csrf_token %}
+                                <input type="hidden" name="form_type" value="update_address">
                                 <div class="form-group">
                                     <label class="fw-bold">Địa chỉ nhận hàng:</label>
-                                    {{ form.address }}
+                                    {{ address_form.address }}
+                                    {% if address_form.address.errors %}
+                                    <div class="text-danger small mt-2">
+                                        {% for error in address_form.address.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
-                                <button type="submit" class="btn btn-sm btn-outline-success mt-2">Cập nhật địa chỉ
+                                <button type="submit" class="btn btn-sm btn-outline-success mt-3">
+                                    <i class="fas fa-save me-1"></i>Cập nhật địa chỉ
                                 </button>
                             </form>
                         </div>
+
+                        <!-- ✅ IMPROVED - Tab 2: Customer Orders -->
+                        {% elif active_tab == 'orders' %}
+                        <h5 class="fw-bold mb-4">
+                            <i class="fas fa-shopping-bag text-warning me-2"></i>ĐƠN HÀNG CỦA BẠN
+                        </h5>
+
+                        {% if customer_orders %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Ngày đặt</th>
+                                    <th>Tổng tiền</th>
+                                    <th>Số lượng sản phẩm</th>
+                                    <th>Chi tiết</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for item in orders_with_items %}
+                                <tr>
+                                    <td><strong>#{{ item.order.id }}</strong></td>
+                                    <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
+                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0|add:"" }}đ
+                                    </td>
+                                    <td>{{ item.items|length }} sản phẩm</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="collapse" data-bs-target="#order-{{ item.order.id }}">
+                                            <i class="fas fa-eye me-1"></i>Xem
+                                        </button>
+                                    </td>
+                                </tr>
+                                <!-- Collapse: Order Details -->
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="collapse" id="order-{{ item.order.id }}">
+                                            <div class="card card-body bg-light">
+                                                <h6 class="fw-bold mb-3">Chi tiết đơn hàng:</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm">
+                                                        <thead>
+                                                        <tr>
+                                                            <th>Sản phẩm</th>
+                                                            <th>Số lượng</th>
+                                                            <th>Giá</th>
+                                                            <th>Thành tiền</th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        {% for order_item in item.items %}
+                                                        <tr>
+                                                            <td>{{ order_item.product.name }}</td>
+                                                            <td class="text-center">{{ order_item.quantity }}</td>
+                                                            <td class="text-end">{{
+                                                                order_item.price|floatformat:0|add:"" }}đ
+                                                            </td>
+                                                            <td class="text-end fw-bold text-danger">
+                                                                {{
+                                                                order_item.price|floatformat:0|add:""|mul:order_item.quantity
+                                                                }}đ
+                                                            </td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div class="mt-2 p-2 bg-white rounded">
+                                                    <strong>Địa chỉ giao:</strong> {{ item.order.address }}
+                                                </div>
+                                                {% if item.order.note %}
+                                                <div class="mt-2 p-2 bg-white rounded">
+                                                    <strong>Ghi chú:</strong> {{ item.order.note }}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>Bạn chưa có đơn hàng nào.
+                            <a href="{% url 'shop:trang_chu' %}">Tiếp tục mua sắm</a>
+                        </div>
+                        {% endif %}
+
+                        <!-- ✅ IMPROVED - Tab 3: Change Password -->
+                        {% elif active_tab == 'password' %}
+                        <h5 class="fw-bold mb-4">
+                            <i class="fas fa-lock text-warning me-2"></i>ĐỔI MẬT KHẨU
+                        </h5>
+
+                        <form method="POST" novalidate>
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="change_password">
+
+                            <!-- Old Password Field -->
+                            <div class="mb-3">
+                                <label for="id_old_password" class="form-label fw-bold">
+                                    {{ password_form.old_password.label }}
+                                </label>
+                                <div class="password-input-wrapper">
+                                    {{ password_form.old_password }}
+                                    <button type="button" class="password-toggle-btn" data-target="#id_old_password">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if password_form.old_password.errors %}
+                                <div class="text-danger small mt-2">
+                                    {% for error in password_form.old_password.errors %}
+                                    <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- New Password Field -->
+                            <div class="mb-3">
+                                <label for="id_new_password" class="form-label fw-bold">
+                                    {{ password_form.new_password.label }}
+                                </label>
+                                <div class="password-input-wrapper">
+                                    {{ password_form.new_password }}
+                                    <button type="button" class="password-toggle-btn" data-target="#id_new_password">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if password_form.new_password.errors %}
+                                <div class="text-danger small mt-2">
+                                    {% for error in password_form.new_password.errors %}
+                                    <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted d-block mt-1">{{ password_form.new_password.help_text|safe
+                                    }}</small>
+                            </div>
+
+                            <!-- Confirm New Password Field -->
+                            <div class="mb-3">
+                                <label for="id_new_password_confirm" class="form-label fw-bold">
+                                    {{ password_form.new_password_confirm.label }}
+                                </label>
+                                <div class="password-input-wrapper">
+                                    {{ password_form.new_password_confirm }}
+                                    <button type="button" class="password-toggle-btn"
+                                            data-target="#id_new_password_confirm">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if password_form.new_password_confirm.errors %}
+                                <div class="text-danger small mt-2">
+                                    {% for error in password_form.new_password_confirm.errors %}
+                                    <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <button type="submit" class="btn btn-success fw-bold mt-3">
+                                <i class="fas fa-check-circle me-1"></i>Thay đổi mật khẩu
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -59,4 +256,104 @@
         </div>
     </div>
 </div>
+
+<!-- Load Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- ✅ IMPROVED - Add password visibility toggle CSS -->
+<style>
+    .password-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .password-input-wrapper input {
+        flex: 1;
+        padding-right: 40px; /* Space for the toggle button */
+    }
+
+    .password-toggle-btn {
+        position: absolute;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 5px 8px;
+        transition: all 0.2s ease;
+        z-index: 10;
+    }
+
+    .password-toggle-btn:hover {
+        color: #28a745;
+        transform: scale(1.1);
+    }
+
+    .password-toggle-btn:active {
+        transform: scale(0.95);
+    }
+
+    .password-toggle-btn i {
+        display: block;
+    }
+
+    /* Table improvements */
+    .table-responsive {
+        border-radius: 0.25rem;
+    }
+
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* Collapse animation */
+    .collapse {
+        margin-top: 1rem;
+    }
+
+    /* Alert styling */
+    .alert {
+        border-radius: 0.5rem;
+    }
+</style>
+
+<!-- ✅ IMPROVED - Add password visibility toggle JS -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get all password toggle buttons
+        const toggleButtons = document.querySelectorAll('.password-toggle-btn');
+
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Get the target password input field
+                const targetSelector = this.getAttribute('data-target');
+                const passwordInput = document.querySelector(targetSelector);
+
+                if (!passwordInput) return;
+
+                // Toggle password visibility
+                const isPassword = passwordInput.type === 'password';
+                passwordInput.type = isPassword ? 'text' : 'password';
+
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (isPassword) {
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+
+                // Add visual feedback
+                this.classList.toggle('active');
+            });
+        });
+    });
+</script>
+
 {% endblock %}

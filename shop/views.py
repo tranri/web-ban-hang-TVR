@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import make_password
 import random, logging
 from django.db import transaction
-from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm
+from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm, ChangePasswordForm
 import requests
 import threading
 from django.conf import settings
@@ -98,6 +98,7 @@ def create_user_session(request, customer):
 @never_cache
 @require_http_methods(["GET", "POST"])
 def tai_khoan(request):
+    """Account page with tabs: Account Info, Orders, and Change Password"""
     customer_id = request.session.get('customer_id')
 
     if not customer_id:
@@ -116,19 +117,77 @@ def tai_khoan(request):
             messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
             return redirect('shop:dang_nhap')
 
-        # Xử lý cập nhật địa chỉ
-        if request.method == 'POST':
-            form = UpdateAddressForm(request.POST, instance=customer)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Địa chỉ đã được cập nhật thành công!")
-                return redirect('shop:tai_khoan')
-        else:
-            form = UpdateAddressForm(instance=customer)
+        # Get the active tab from GET parameter (default: 'info')
+        active_tab = request.GET.get('tab', 'info')
 
+        # Initialize context
         context = build_render_context(request, 'shop/tai_khoan.html', customer=customer)
-        context['form'] = form
+        context['active_tab'] = active_tab
+
+        # Handle POST requests for different forms
+        if request.method == 'POST':
+            form_type = request.POST.get('form_type', '')
+
+            # ✅ IMPROVED - Handle "Update Address" form submission
+            if form_type == 'update_address':
+                address_form = UpdateAddressForm(request.POST, instance=customer)
+                if address_form.is_valid():
+                    address_form.save()
+                    messages.success(request, "Địa chỉ đã được cập nhật thành công!")
+                    logger.info(f"Address updated for customer: {customer.phone}")
+                    return redirect('shop:tai_khoan')
+                else:
+                    context['address_form'] = address_form
+                    context['active_tab'] = 'info'
+
+            # ✅ IMPROVED - Handle "Change Password" form submission
+            elif form_type == 'change_password':
+                password_form = ChangePasswordForm(request.POST)
+                if password_form.is_valid():
+                    old_password = password_form.cleaned_data['old_password']
+                    new_password = password_form.cleaned_data['new_password']
+
+                    # Verify old password
+                    if not customer.check_password(old_password):
+                        messages.error(request, "Mật khẩu cũ không chính xác!")
+                        logger.warning(f"Failed password change attempt for customer: {customer.phone}")
+                        context['password_form'] = password_form
+                        context['active_tab'] = 'password'
+                    else:
+                        # Update password
+                        customer.set_password(new_password)
+                        customer.save()
+
+                        # Refresh session with new password hash
+                        request.session['_auth_user_hash'] = customer.password[:10]
+
+                        messages.success(request, "Mật khẩu đã được thay đổi thành công!")
+                        logger.info(f"Password changed for customer: {customer.phone}")
+                        return redirect('shop:tai_khoan?tab=password')
+                else:
+                    context['password_form'] = password_form
+                    context['active_tab'] = 'password'
+        else:
+            # GET request - initialize forms
+            context['address_form'] = UpdateAddressForm(instance=customer)
+            context['password_form'] = ChangePasswordForm()
+
+        # ✅ IMPROVED - Fetch customer orders for display
+        customer_orders = Order.objects.filter(phone=customer.phone).order_by('-created_at')
+        context['customer_orders'] = customer_orders
+
+        # Get order items for each order
+        orders_with_items = []
+        for order in customer_orders:
+            order_items = OrderItem.objects.filter(order=order)
+            orders_with_items.append({
+                'order': order,
+                'items': order_items
+            })
+        context['orders_with_items'] = orders_with_items
+
         return render(request, 'shop/tai_khoan.html', context)
+
     except Customer.DoesNotExist:
         logger.warning(f"Account page - customer {customer_id} not found")
         request.session.flush()

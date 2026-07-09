@@ -201,3 +201,48 @@ class UpdateAddressForm(forms.ModelForm):
         labels = {
             'address': 'Địa chỉ giao hàng'
         }
+
+
+# ✅ IMPROVED - Add password change form for account page
+class ChangePasswordForm(forms.Form):
+    """Form to change customer password"""
+
+    old_password = forms.CharField(
+        label="Mật khẩu cũ",
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control password-input',
+            'placeholder': 'Nhập mật khẩu cũ...',
+            'autocomplete': 'current-password'
+        })
+    )
+
+    new_password = forms.CharField(
+        label="Mật khẩu mới",
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control password-input',
+            'placeholder': 'Nhập mật khẩu mới...',
+            'autocomplete': 'new-password'
+        }),
+        validators=[validate_password],
+        help_text="Mật khẩu phải có ít nhất 8 ký tự, chứa chữ thường, số và ký tự đặc biệt"
+    )
+
+    new_password_confirm = forms.CharField(
+        label="Xác nhận mật khẩu mới",
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control password-input',
+            'placeholder': 'Xác nhận mật khẩu mới...',
+            'autocomplete': 'new-password'
+        })
+    )
+
+    def clean_new_password_confirm(self):
+        """Validate that new passwords match"""
+        new_password = self.cleaned_data.get('new_password')
+        new_password_confirm = self.cleaned_data.get('new_password_confirm')
+
+        if new_password and new_password_confirm:
+            if new_password != new_password_confirm:
+                raise forms.ValidationError("Mật khẩu mới không khớp!")
+
+        return new_password_confirm
