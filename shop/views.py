@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import make_password
 import random, logging
 from django.db import transaction
-from .forms import OrderForm, CustomerRegisterForm
+from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm
 import requests
 import threading
 from django.conf import settings
@@ -96,9 +96,8 @@ def create_user_session(request, customer):
 
 
 @never_cache
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def tai_khoan(request):
-    """Protected account page - check session"""
     customer_id = request.session.get('customer_id')
 
     if not customer_id:
@@ -117,7 +116,18 @@ def tai_khoan(request):
             messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
             return redirect('shop:dang_nhap')
 
+        # Xử lý cập nhật địa chỉ
+        if request.method == 'POST':
+            form = UpdateAddressForm(request.POST, instance=customer)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Địa chỉ đã được cập nhật thành công!")
+                return redirect('shop:tai_khoan')
+        else:
+            form = UpdateAddressForm(instance=customer)
+
         context = build_render_context(request, 'shop/tai_khoan.html', customer=customer)
+        context['form'] = form
         return render(request, 'shop/tai_khoan.html', context)
     except Customer.DoesNotExist:
         logger.warning(f"Account page - customer {customer_id} not found")

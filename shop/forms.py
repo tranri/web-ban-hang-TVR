@@ -185,3 +185,19 @@ class CustomerLoginForm(forms.Form):
         if not phone.isdigit() or len(phone) < 10 or len(phone) > 11:
             raise forms.ValidationError("Số điện thoại không hợp lệ.")
         return phone
+
+
+class UpdateAddressForm(forms.ModelForm):
+    class Meta:
+        model = Customer
+        fields = ['address']
+        widgets = {
+            'address': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Nhập địa chỉ của bạn...'
+            }),
+        }
+        labels = {
+            'address': 'Địa chỉ giao hàng'
+        }

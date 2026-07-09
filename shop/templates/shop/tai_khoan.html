@@ -36,10 +36,17 @@
                         <h5 class="fw-bold mb-4">THÔNG TIN TÀI KHOẢN</h5>
                         <div class="d-flex flex-column gap-3">
                             <p class="m-0"><strong>Họ tên:</strong> {{ customer.full_name }}</p>
-                            <!-- Các trường dưới đây yêu cầu bạn đã thêm vào model.py -->
                             <p class="m-0"><strong>Email:</strong> {{ customer.email|default:"Chưa cập nhật" }}</p>
                             <p class="m-0"><strong>Điện thoại:</strong> {{ customer.phone }}</p>
-                            <p class="m-0"><strong>Địa chỉ:</strong> {{ customer.address|default:"Chưa cập nhật" }}</p>
+                            <form method="POST" class="mt-2">
+                                {% csrf_token %}
+                                <div class="form-group">
+                                    <label class="fw-bold">Địa chỉ nhận hàng:</label>
+                                    {{ form.address }}
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-outline-success mt-2">Cập nhật địa chỉ
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
