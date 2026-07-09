@@ -14,12 +14,12 @@
                 <div class="row">
                     <!-- Menu Điều hướng Tài khoản (Bên trái nội dung) -->
                     <div class="col-md-4 border-end">
-                        <h5 class="fw-bold mb-3">TRANG TÀI KHOẢN</h5>
-                        <p class="mb-4">Xin chào, <span class="text-danger fw-bold">{{ customer.full_name }}</span> !
+                        <p class="fw-bold mb-4">Xin Chào, <span
+                                class="text-danger fw-bold">{{ customer.full_name }}</span> !
                         </p>
-                        <ul class="nav flex-column">
+                        <ul class="nav flex-column fw-bold">
                             <li class="nav-item mb-2">
-                                <a href="{% url 'shop:tai_khoan' %}" class="text-decoration-none text-warning fw-bold">Thông
+                                <a href="{% url 'shop:tai_khoan' %}" class="text-decoration-none text-warning">Thông
                                     tin tài khoản</a>
                             </li>
                             <li class="nav-item mb-2">
@@ -27,9 +27,6 @@
                             </li>
                             <li class="nav-item mb-2">
                                 <a href="#" class="text-decoration-none text-dark">Đổi mật khẩu</a>
-                            </li>
-                            <li class="nav-item mb-2">
-                                <a href="#" class="text-decoration-none text-dark">Sổ địa chỉ (1)</a>
                             </li>
                         </ul>
                     </div>

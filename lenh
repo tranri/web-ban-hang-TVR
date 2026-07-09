@@ -1,0 +1,6 @@
+git add .
+git commit -m "Mô tả của anh"
+git push
+
+
+python manage.py runserver
