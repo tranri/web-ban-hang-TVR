@@ -176,13 +176,22 @@ def tai_khoan(request):
         customer_orders = Order.objects.filter(phone=customer.phone).order_by('-created_at')
         context['customer_orders'] = customer_orders
 
-        # Get order items for each order
+        # Get order items for each order and pre-calculate totals
         orders_with_items = []
         for order in customer_orders:
             order_items = OrderItem.objects.filter(order=order)
+            # ✅ FIXED - Pre-calculate item totals in Python instead of template
+            items_with_totals = []
+            for item in order_items:
+                items_with_totals.append({
+                    'product': item.product,
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'total': item.price * item.quantity  # Calculate total here
+                })
             orders_with_items.append({
                 'order': order,
-                'items': order_items
+                'items': items_with_totals
             })
         context['orders_with_items'] = orders_with_items
 

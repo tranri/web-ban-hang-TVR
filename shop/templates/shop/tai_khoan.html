@@ -100,7 +100,7 @@
                                 <tr>
                                     <td><strong>#{{ item.order.id }}</strong></td>
                                     <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
-                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0|add:"" }}đ
+                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0 }}đ
                                     </td>
                                     <td>{{ item.items|length }} sản phẩm</td>
                                     <td>
@@ -131,13 +131,10 @@
                                                         <tr>
                                                             <td>{{ order_item.product.name }}</td>
                                                             <td class="text-center">{{ order_item.quantity }}</td>
-                                                            <td class="text-end">{{
-                                                                order_item.price|floatformat:0|add:"" }}đ
+                                                            <td class="text-end">{{ order_item.price|floatformat:0 }}đ
                                                             </td>
                                                             <td class="text-end fw-bold text-danger">
-                                                                {{
-                                                                order_item.price|floatformat:0|add:""|mul:order_item.quantity
-                                                                }}đ
+                                                                {{ order_item.total|floatformat:0 }}đ
                                                             </td>
                                                         </tr>
                                                         {% endfor %}
