@@ -179,12 +179,11 @@
 
                             <!-- Old Password Field -->
                             <div class="mb-3">
-                                <label for="id_old_password" class="form-label fw-bold">
-                                    {{ password_form.old_password.label }}
-                                </label>
+                                <label class="form-label fw-bold">{{ password_form.old_password.label }}</label>
                                 <div class="password-input-wrapper">
                                     {{ password_form.old_password }}
-                                    <button type="button" class="password-toggle-btn" data-target="#id_old_password">
+                                    <button type="button" class="password-toggle-btn"
+                                            onclick="togglePasswordVisibility(this)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -199,12 +198,11 @@
 
                             <!-- New Password Field -->
                             <div class="mb-3">
-                                <label for="id_new_password" class="form-label fw-bold">
-                                    {{ password_form.new_password.label }}
-                                </label>
+                                <label class="form-label fw-bold">{{ password_form.new_password.label }}</label>
                                 <div class="password-input-wrapper">
                                     {{ password_form.new_password }}
-                                    <button type="button" class="password-toggle-btn" data-target="#id_new_password">
+                                    <button type="button" class="password-toggle-btn"
+                                            onclick="togglePasswordVisibility(this)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -221,13 +219,11 @@
 
                             <!-- Confirm New Password Field -->
                             <div class="mb-3">
-                                <label for="id_new_password_confirm" class="form-label fw-bold">
-                                    {{ password_form.new_password_confirm.label }}
-                                </label>
+                                <label class="form-label fw-bold">{{ password_form.new_password_confirm.label }}</label>
                                 <div class="password-input-wrapper">
                                     {{ password_form.new_password_confirm }}
                                     <button type="button" class="password-toggle-btn"
-                                            data-target="#id_new_password_confirm">
+                                            onclick="togglePasswordVisibility(this)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -319,41 +315,31 @@
     }
 </style>
 
-<!-- ✅ IMPROVED - Add password visibility toggle JS -->
+<!-- ✅ FIXED - Simplified password visibility toggle JS without 'for' attribute dependency -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Get all password toggle buttons
-        const toggleButtons = document.querySelectorAll('.password-toggle-btn');
+    function togglePasswordVisibility(button) {
+        // Get the password input field (previous sibling)
+        const passwordInput = button.previousElementSibling;
 
-        toggleButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
+        if (!passwordInput || passwordInput.tagName !== 'INPUT') return;
 
-                // Get the target password input field
-                const targetSelector = this.getAttribute('data-target');
-                const passwordInput = document.querySelector(targetSelector);
+        // Toggle password visibility
+        const isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
 
-                if (!passwordInput) return;
+        // Toggle icon
+        const icon = button.querySelector('i');
+        if (isPassword) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
 
-                // Toggle password visibility
-                const isPassword = passwordInput.type === 'password';
-                passwordInput.type = isPassword ? 'text' : 'password';
-
-                // Toggle icon
-                const icon = this.querySelector('i');
-                if (isPassword) {
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
-                } else {
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
-                }
-
-                // Add visual feedback
-                this.classList.toggle('active');
-            });
-        });
-    });
+        // Add visual feedback
+        button.classList.toggle('active');
+    }
 </script>
 
 {% endblock %}
