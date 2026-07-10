@@ -20,7 +20,6 @@
                                 class="text-danger fw-bold">{{ customer.full_name }}</span> !
                         </p>
                         <ul class="nav flex-column fw-bold">
-                            <!-- ✅ IMPROVED - Tab navigation with active state -->
                             <li class="nav-item mb-2">
                                 <a href="{% url 'shop:tai_khoan' %}?tab=info"
                                    class="text-decoration-none {% if active_tab == 'info' %}text-warning{% else %}text-dark{% endif %}">
@@ -44,7 +43,7 @@
 
                     <!-- Chi tiết Thông tin (Bên phải nội dung) -->
                     <div class="col-md-9 ps-4">
-                        <!-- ✅ IMPROVED - Tab 1: Account Information -->
+                        <!-- Tab 1: Account Information -->
                         {% if active_tab == 'info' %}
                         <h5 class="fw-bold mb-4">
                             <i class="fas fa-user-circle text-warning me-2"></i>THÔNG TIN TÀI KHOẢN
@@ -79,7 +78,7 @@
                             </form>
                         </div>
 
-                        <!-- ✅ IMPROVED - Tab 2: Customer Orders -->
+                        <!-- Tab 2: Customer Orders -->
                         {% elif active_tab == 'orders' %}
                         <h5 class="fw-bold mb-4">
                             <i class="fas fa-shopping-bag text-warning me-2"></i>ĐƠN HÀNG CỦA BẠN
@@ -102,8 +101,7 @@
                                 <tr>
                                     <td><strong>#{{ item.order.id }}</strong></td>
                                     <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
-                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0 }}đ
-                                    </td>
+                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0 }}đ</td>
                                     <td>{{ item.items|length }} sản phẩm</td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-primary"
@@ -112,7 +110,6 @@
                                         </button>
                                     </td>
                                 </tr>
-                                <!-- Collapse: Order Details -->
                                 <tr>
                                     <td colspan="5">
                                         <div class="collapse" id="order-{{ item.order.id }}">
@@ -166,7 +163,7 @@
                         </div>
                         {% endif %}
 
-                        <!-- ✅ IMPROVED - Tab 3: Change Password -->
+                        <!-- Tab 3: Change Password -->
                         {% elif active_tab == 'password' %}
                         <h5 class="fw-bold mb-4">
                             <i class="fas fa-lock text-warning me-2"></i>ĐỔI MẬT KHẨU
@@ -176,7 +173,6 @@
                             {% csrf_token %}
                             <input type="hidden" name="form_type" value="change_password">
 
-                            <!-- Old Password Field -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold">{{ password_form.old_password.label }}</label>
                                 <div class="password-input-wrapper">
@@ -195,7 +191,6 @@
                                 {% endif %}
                             </div>
 
-                            <!-- New Password Field -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold">{{ password_form.new_password.label }}</label>
                                 <div class="password-input-wrapper">
@@ -214,7 +209,6 @@
                                 {% endif %}
                             </div>
 
-                            <!-- Confirm New Password Field -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold">{{ password_form.new_password_confirm.label }}</label>
                                 <div class="password-input-wrapper">
@@ -233,10 +227,7 @@
                                 {% endif %}
                             </div>
 
-                            <!-- ✅ IMPROVED - Password Requirements Display (BELOW confirm field) -->
                             <div id="password-requirements-change"></div>
-
-                            <!-- ✅ IMPROVED - Password Match Display (BELOW confirm field) -->
                             <div id="password-match-change"></div>
 
                             <button type="submit" class="btn btn-success fw-bold mt-3">
@@ -256,13 +247,9 @@
     </div>
 </div>
 
-<!-- Load Font Awesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- Load Password Strength CSS -->
 <link rel="stylesheet" href="/static/css/password-strength.css">
 
-<!-- ✅ IMPROVED - Add password visibility toggle CSS -->
 <style>
     .password-input-wrapper {
         position: relative;
@@ -272,7 +259,7 @@
 
     .password-input-wrapper input {
         flex: 1;
-        padding-right: 40px; /* Space for the toggle button */
+        padding-right: 40px;
     }
 
     .password-toggle-btn {
@@ -301,7 +288,6 @@
         display: block;
     }
 
-    /* Table improvements */
     .table-responsive {
         border-radius: 0.25rem;
     }
@@ -310,30 +296,23 @@
         background-color: #f8f9fa;
     }
 
-    /* Collapse animation */
     .collapse {
         margin-top: 1rem;
     }
 
-    /* Alert styling */
     .alert {
         border-radius: 0.5rem;
     }
 </style>
 
-<!-- ✅ FIXED - Simplified password visibility toggle JS without 'for' attribute dependency -->
 <script>
     function togglePasswordVisibility(button) {
-        // Get the password input field (previous sibling)
         const passwordInput = button.previousElementSibling;
-
         if (!passwordInput || passwordInput.tagName !== 'INPUT') return;
 
-        // Toggle password visibility
         const isPassword = passwordInput.type === 'password';
         passwordInput.type = isPassword ? 'text' : 'password';
 
-        // Toggle icon
         const icon = button.querySelector('i');
         if (isPassword) {
             icon.classList.remove('fa-eye');
@@ -343,24 +322,20 @@
             icon.classList.add('fa-eye');
         }
 
-        // Add visual feedback
         button.classList.toggle('active');
     }
 </script>
 
-<!-- ✅ IMPROVED - Password Strength Checker for Change Password Form -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const newPasswordInput = document.getElementById('id_new_password');
         const newPasswordConfirmInput = document.getElementById('id_new_password_confirm');
         const requirementsContainer = document.getElementById('password-requirements-change');
-        const matchContainer = document.getElementById('password-match-change');
 
         if (!newPasswordInput || !requirementsContainer) {
-            return; // Exit if not on change password section
+            return;
         }
 
-        // Password requirement checks
         const requirements = {
             lowercase: {
                 regex: /[a-z]/,
@@ -384,7 +359,6 @@
             }
         };
 
-        // Create HTML for requirements display
         function createRequirementsHTML() {
             let html = '<div class="password-requirements-box mt-3">';
             html += '<p class="fw-bold mb-2">📋 Yêu cầu mật khẩu:</p>';
@@ -400,8 +374,7 @@
                 </li>`;
             });
 
-            html += '</ul>';
-            html += '</div>';
+            html += '</ul></div>';
 
             if (newPasswordConfirmInput) {
                 html += '<div class="password-match-box mt-3" id="password-match-change-box" style="display: none;">';
@@ -413,53 +386,28 @@
             return html;
         }
 
-        // Insert requirements HTML
         requirementsContainer.innerHTML = createRequirementsHTML();
 
-        // Update requirement checks
-        function updateRequirements(password) {
-            let allMet = true;
-
-            const hasLowercase = requirements.lowercase.regex.test(password);
-            updateRequirementItem('req-lowercase-change', hasLowercase);
-            if (!hasLowercase) allMet = false;
-
-            const hasNumber = requirements.number.regex.test(password);
-            updateRequirementItem('req-number-change', hasNumber);
-            if (!hasNumber) allMet = false;
-
-            const hasSpecial = requirements.special.regex.test(password);
-            updateRequirementItem('req-special-change', hasSpecial);
-            if (!hasSpecial) allMet = false;
-
-            const hasMinLength = requirements.minLength.check(password);
-            updateRequirementItem('req-length-change', hasMinLength);
-            if (!hasMinLength) allMet = false;
-
-            return allMet;
-        }
-
-        // Update individual requirement item styling
         function updateRequirementItem(id, isMet) {
             const element = document.getElementById(id);
             if (!element) return;
 
             if (isMet) {
                 element.style.color = '#28a745';
-                element.innerHTML = element.innerHTML.replace(
-                    /fa-circle-xmark/,
-                    'fa-check-circle'
-                );
+                element.innerHTML = element.innerHTML.replace(/fa-circle-xmark/, 'fa-check-circle');
             } else {
                 element.style.color = '#ccc';
-                element.innerHTML = element.innerHTML.replace(
-                    /fa-check-circle/,
-                    'fa-circle-xmark'
-                );
+                element.innerHTML = element.innerHTML.replace(/fa-check-circle/, 'fa-circle-xmark');
             }
         }
 
-        // Check password confirmation match
+        function updateRequirements(password) {
+            updateRequirementItem('req-lowercase-change', requirements.lowercase.regex.test(password));
+            updateRequirementItem('req-number-change', requirements.number.regex.test(password));
+            updateRequirementItem('req-special-change', requirements.special.regex.test(password));
+            updateRequirementItem('req-length-change', requirements.minLength.check(password));
+        }
+
         function updatePasswordMatch() {
             if (!newPasswordConfirmInput) return;
 
@@ -467,6 +415,8 @@
             const passwordConfirm = newPasswordConfirmInput.value;
             const matchBox = document.getElementById('password-match-change-box');
             const matchFeedback = document.getElementById('match-feedback-change');
+
+            if (!matchBox) return;
 
             if (passwordConfirm.length === 0) {
                 matchBox.style.display = 'none';
@@ -476,23 +426,18 @@
             matchBox.style.display = 'block';
 
             if (password === passwordConfirm) {
-                matchFeedback.innerHTML = `
-                    <span style="color: #28a745; display: flex; align-items: center;">
-                        <i class="fas fa-check-circle" style="margin-right: 8px; font-size: 18px;"></i>
-                        Mật khẩu khớp ✓
-                    </span>
-                `;
+                matchFeedback.innerHTML = `<span style="color: #28a745; display: flex; align-items: center;">
+                    <i class="fas fa-check-circle" style="margin-right: 8px; font-size: 18px;"></i>
+                    Mật khẩu khớp ✓
+                </span>`;
             } else {
-                matchFeedback.innerHTML = `
-                    <span style="color: #dc3545; display: flex; align-items: center;">
-                        <i class="fas fa-times-circle" style="margin-right: 8px; font-size: 18px;"></i>
-                        Mật khẩu không khớp
-                    </span>
-                `;
+                matchFeedback.innerHTML = `<span style="color: #dc3545; display: flex; align-items: center;">
+                    <i class="fas fa-times-circle" style="margin-right: 8px; font-size: 18px;"></i>
+                    Mật khẩu không khớp
+                </span>`;
             }
         }
 
-        // Event listeners
         newPasswordInput.addEventListener('input', function() {
             updateRequirements(this.value);
             updatePasswordMatch();
@@ -502,7 +447,6 @@
             newPasswordConfirmInput.addEventListener('input', updatePasswordMatch);
         }
 
-        // Initial check
         updateRequirements(newPasswordInput.value);
     });
 </script>
