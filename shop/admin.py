@@ -3,9 +3,14 @@ from .models import Category, Product, ShopConfiguration, BannerImage, DocumentP
 from django import forms
 from django.utils.html import format_html
 from django.urls import reverse, path
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.db.models import Prefetch
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models.functions import TruncDay, TruncMonth
+from django.db.models import Sum
+import json
 
 
 # Cho phép thêm ảnh Banner trực tiếp trong trang cấu hình Website
@@ -178,6 +183,68 @@ class OrderAdmin(admin.ModelAdmin):
         return qs.prefetch_related(
             Prefetch('items', queryset=OrderItem.objects.select_related('product'))
         )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('revenue-chart/', self.admin_site.admin_view(self.revenue_chart_view),
+                 name='shop_order_revenue_chart'),
+        ]
+        return custom_urls + urls
+
+    def revenue_chart_view(self, request):
+        """
+        Admin view: shows revenue chart.
+        Query params:
+            days (int) - number of days to show (default 30). If >90, groups by month.
+        """
+        # parse days param
+        try:
+            days = int(request.GET.get('days', 30))
+        except Exception:
+            days = 30
+
+        now = timezone.now()
+        start = now - timedelta(days=days)
+
+        # choose grouping based on period length
+        if days <= 90:
+            period_func = TruncDay('created_at')
+            qs = (
+                Order.objects
+                .filter(created_at__gte=start)
+                .annotate(period=TruncDay('created_at'))
+                .values('period')
+                .annotate(total=Sum('total_price'))
+                .order_by('period')
+            )
+            labels = [item['period'].date().isoformat() for item in qs]
+        else:
+            qs = (
+                Order.objects
+                .filter(created_at__gte=start)
+                .annotate(period=TruncMonth('created_at'))
+                .values('period')
+                .annotate(total=Sum('total_price'))
+                .order_by('period')
+            )
+            labels = [item['period'].date().strftime('%Y-%m') for item in qs]
+
+        data = [float(item['total'] or 0) for item in qs]
+
+        context = {
+            'labels_json': json.dumps(labels),
+            'data_json': json.dumps(data),
+            'days': days,
+            'title': f'Revenue (last {days} days)',
+        }
+        return render(request, 'admin/revenue_chart.html', context)
+
+    def changelist_view(self, request, extra_context=None):
+        if extra_context is None:
+            extra_context = {}
+        extra_context['revenue_chart_url'] = reverse('admin:shop_order_revenue_chart')
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(Customer)
