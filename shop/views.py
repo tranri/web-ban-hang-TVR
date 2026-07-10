@@ -18,6 +18,8 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from django.views.decorators.cache import never_cache
+from django.contrib.messages import get_messages
+from django.contrib import messages as django_messages
 
 logger = logging.getLogger(__name__)
 
@@ -289,28 +291,18 @@ def dang_nhap(request):
 @never_cache
 @require_http_methods(["GET"])
 def dang_xuat(request):
-    """Secure logout - destroy session"""
+    # Consume any queued messages so they won't survive across flush
+    list(get_messages(request))
+
     customer_name = request.session.get('customer_name')
 
-    # ✅ SECURE SESSION CLEARING
-    # 1. Delete all session data
-    if 'customer_id' in request.session:
-        del request.session['customer_id']
-    if 'customer_name' in request.session:
-        del request.session['customer_name']
-    if 'customer_phone' in request.session:
-        del request.session['customer_phone']
-    if '_auth_user_id' in request.session:
-        del request.session['_auth_user_id']
-    if '_auth_user_hash' in request.session:
-        del request.session['_auth_user_hash']
-
-    # 2. Flush entire session (recommended)
+    # Flush the session (rotates key and clears server-stored session data)
     request.session.flush()
 
-    logger.info(f"Customer logged out: {customer_name}")
-    messages.success(request, "Đã đăng xuất thành công!")
+    # Now add a fresh logout confirmation (only this message will remain)
+    # django_messages.success(request, "Đã đăng xuất thành công!")
 
+    logger.info(f"Customer logged out: {customer_name}")
     return redirect('shop:trang_chu')
 
 
