@@ -5,6 +5,7 @@ from django.utils.html import format_html
 from django.urls import reverse, path
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
+from django.db.models import Prefetch
 
 
 # Cho phép thêm ảnh Banner trực tiếp trong trang cấu hình Website
@@ -174,7 +175,9 @@ class OrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # Don't join customer as it might not exist, but prefetch OrderItems for inline
-        return qs.prefetch_related('orderitem_set')
+        return qs.prefetch_related(
+            Prefetch('items', queryset=OrderItem.objects.select_related('product'))
+        )
 
 
 @admin.register(Customer)
