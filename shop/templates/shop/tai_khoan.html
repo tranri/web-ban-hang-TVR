@@ -210,8 +210,6 @@
                                     {% endfor %}
                                 </div>
                                 {% endif %}
-                                <small class="text-muted d-block mt-1">Mật khẩu phải có ít nhất 8 ký tự, chứa chữ
-                                    thường, số và ký tự đặc biệt</small>
                             </div>
 
                             <!-- Confirm New Password Field -->
@@ -233,6 +231,12 @@
                                 {% endif %}
                             </div>
 
+                            <!-- ✅ IMPROVED - Password Requirements Display (BELOW confirm field) -->
+                            <div id="password-requirements-change"></div>
+
+                            <!-- ✅ IMPROVED - Password Match Display (BELOW confirm field) -->
+                            <div id="password-match-change"></div>
+
                             <button type="submit" class="btn btn-success fw-bold mt-3">
                                 <i class="fas fa-check-circle me-1"></i>Thay đổi mật khẩu
                             </button>
@@ -252,6 +256,9 @@
 
 <!-- Load Font Awesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Load Password Strength CSS -->
+<link rel="stylesheet" href="/static/css/password-strength.css">
 
 <!-- ✅ IMPROVED - Add password visibility toggle CSS -->
 <style>
@@ -337,6 +344,165 @@
         // Add visual feedback
         button.classList.toggle('active');
     }
+</script>
+
+<!-- ✅ IMPROVED - Password Strength Checker for Change Password Form -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const newPasswordInput = document.getElementById('id_new_password');
+        const newPasswordConfirmInput = document.getElementById('id_new_password_confirm');
+        const requirementsContainer = document.getElementById('password-requirements-change');
+        const matchContainer = document.getElementById('password-match-change');
+
+        if (!newPasswordInput || !requirementsContainer) {
+            return; // Exit if not on change password section
+        }
+
+        // Password requirement checks
+        const requirements = {
+            lowercase: {
+                regex: /[a-z]/,
+                text: 'Chữ thường (a-z)',
+                id: 'req-lowercase-change'
+            },
+            number: {
+                regex: /[0-9]/,
+                text: 'Chữ số (0-9)',
+                id: 'req-number-change'
+            },
+            special: {
+                regex: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/,
+                text: 'Ký tự đặc biệt (@, #, $, !, etc.)',
+                id: 'req-special-change'
+            },
+            minLength: {
+                check: (pwd) => pwd.length >= 8,
+                text: 'Tối thiểu 8 ký tự',
+                id: 'req-length-change'
+            }
+        };
+
+        // Create HTML for requirements display
+        function createRequirementsHTML() {
+            let html = '<div class="password-requirements-box mt-3">';
+            html += '<p class="fw-bold mb-2">📋 Yêu cầu mật khẩu:</p>';
+            html += '<ul class="list-unstyled">';
+
+            Object.keys(requirements).forEach(key => {
+                const req = requirements[key];
+                html += `<li class="mb-2">
+                    <span id="${req.id}" class="requirement-item" style="display: inline-flex; align-items: center; color: #ccc;">
+                        <i class="fas fa-circle-xmark" style="margin-right: 8px; font-size: 14px;"></i>
+                        ${req.text}
+                    </span>
+                </li>`;
+            });
+
+            html += '</ul>';
+            html += '</div>';
+
+            if (newPasswordConfirmInput) {
+                html += '<div class="password-match-box mt-3" id="password-match-change-box" style="display: none;">';
+                html += '<p class="fw-bold mb-2">✓ Xác nhận mật khẩu:</p>';
+                html += '<div id="match-feedback-change"></div>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // Insert requirements HTML
+        requirementsContainer.innerHTML = createRequirementsHTML();
+
+        // Update requirement checks
+        function updateRequirements(password) {
+            let allMet = true;
+
+            const hasLowercase = requirements.lowercase.regex.test(password);
+            updateRequirementItem('req-lowercase-change', hasLowercase);
+            if (!hasLowercase) allMet = false;
+
+            const hasNumber = requirements.number.regex.test(password);
+            updateRequirementItem('req-number-change', hasNumber);
+            if (!hasNumber) allMet = false;
+
+            const hasSpecial = requirements.special.regex.test(password);
+            updateRequirementItem('req-special-change', hasSpecial);
+            if (!hasSpecial) allMet = false;
+
+            const hasMinLength = requirements.minLength.check(password);
+            updateRequirementItem('req-length-change', hasMinLength);
+            if (!hasMinLength) allMet = false;
+
+            return allMet;
+        }
+
+        // Update individual requirement item styling
+        function updateRequirementItem(id, isMet) {
+            const element = document.getElementById(id);
+            if (!element) return;
+
+            if (isMet) {
+                element.style.color = '#28a745';
+                element.innerHTML = element.innerHTML.replace(
+                    /fa-circle-xmark/,
+                    'fa-check-circle'
+                );
+            } else {
+                element.style.color = '#ccc';
+                element.innerHTML = element.innerHTML.replace(
+                    /fa-check-circle/,
+                    'fa-circle-xmark'
+                );
+            }
+        }
+
+        // Check password confirmation match
+        function updatePasswordMatch() {
+            if (!newPasswordConfirmInput) return;
+
+            const password = newPasswordInput.value;
+            const passwordConfirm = newPasswordConfirmInput.value;
+            const matchBox = document.getElementById('password-match-change-box');
+            const matchFeedback = document.getElementById('match-feedback-change');
+
+            if (passwordConfirm.length === 0) {
+                matchBox.style.display = 'none';
+                return;
+            }
+
+            matchBox.style.display = 'block';
+
+            if (password === passwordConfirm) {
+                matchFeedback.innerHTML = `
+                    <span style="color: #28a745; display: flex; align-items: center;">
+                        <i class="fas fa-check-circle" style="margin-right: 8px; font-size: 18px;"></i>
+                        Mật khẩu khớp ✓
+                    </span>
+                `;
+            } else {
+                matchFeedback.innerHTML = `
+                    <span style="color: #dc3545; display: flex; align-items: center;">
+                        <i class="fas fa-times-circle" style="margin-right: 8px; font-size: 18px;"></i>
+                        Mật khẩu không khớp
+                    </span>
+                `;
+            }
+        }
+
+        // Event listeners
+        newPasswordInput.addEventListener('input', function() {
+            updateRequirements(this.value);
+            updatePasswordMatch();
+        });
+
+        if (newPasswordConfirmInput) {
+            newPasswordConfirmInput.addEventListener('input', updatePasswordMatch);
+        }
+
+        // Initial check
+        updateRequirements(newPasswordInput.value);
+    });
 </script>
 
 {% endblock %}
