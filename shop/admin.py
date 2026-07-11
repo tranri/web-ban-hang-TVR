@@ -48,14 +48,24 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'price', 'import_price', 'sale_price',
         'stock', 'new_import_price', 'new_stock',
-        'available', 'action_button'
+        'profit_margin_percentage', 'action_button'
     ]
-    list_editable = ['price', 'new_import_price', 'new_stock', 'available']
+    list_editable = ['price', 'new_import_price', 'new_stock']
     readonly_fields = ['import_price', 'stock', 'sale_price']
-    list_filter = ['available', 'category']
+    list_filter = ['category']
     search_fields = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
     list_per_page = 50
+
+    def profit_margin_percentage(self, obj):
+        """Calculate and display the profit margin percentage between purchase price and selling price"""
+        if obj.import_price and obj.import_price > 0:
+            margin = ((obj.price - obj.import_price) / obj.import_price) * 100
+            margin_str = f"{margin:.1f}%"
+            return format_html('<span style="color: #ff0000; font-weight: bold;">{}</span>', margin_str)
+        return "-"
+
+    profit_margin_percentage.short_description = "Lợi nhuận (%)"
 
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
@@ -73,9 +83,23 @@ class ProductAdmin(admin.ModelAdmin):
 
     def update_data_view(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
+
+        # Check if product stock is not zero
         if product.stock != 0:
             messages.error(request,
                            f"Không thể cập nhật: Tồn kho của '{product.name}' đang là {product.stock}, phải bằng 0 mới được phép cập nhật!")
+            return redirect('admin:shop_product_changelist')
+
+        # NEW VALIDATION: Check if new_stock is non-zero
+        if product.new_stock is None or product.new_stock == 0:
+            messages.error(request,
+                           f"Không thể cập nhật: Số lượng mới phải khác 0!")
+            return redirect('admin:shop_product_changelist')
+
+        # NEW VALIDATION: Check if new_import_price is non-zero
+        if product.new_import_price is None or product.new_import_price == 0:
+            messages.error(request,
+                           f"Không thể cập nhật: Giá nhập mới phải khác 0!")
             return redirect('admin:shop_product_changelist')
 
         product.sale_price = product.price
