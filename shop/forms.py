@@ -6,20 +6,11 @@ import re
 
 
 class OrderForm(forms.ModelForm):
-    email = forms.EmailField(
-        required=False,
-        widget=forms.EmailInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Nhập email (nếu có)...'
-        })
-    )
-
     class Meta:
         model = Order
-        fields = ['full_name', 'email', 'phone', 'address', 'note']
+        fields = ['full_name', 'phone', 'address', 'note']  # removed 'email'
         widgets = {
             'full_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nhập họ tên...'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Nhập email...'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nhập số điện thoại...'}),
             'address': forms.Textarea(
                 attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Số nhà, đường, phường/xã...'}),
@@ -40,8 +31,6 @@ class OrderForm(forms.ModelForm):
 
 
 class CustomerRegisterForm(forms.ModelForm):
-    """Enhanced registration form with strong password validation"""
-
     address = forms.CharField(
         widget=forms.Textarea(attrs={
             'class': 'form-control',
@@ -60,7 +49,6 @@ class CustomerRegisterForm(forms.ModelForm):
             'autocomplete': 'new-password'
         }),
         validators=[validate_password],
-        # ✅ IMPROVED - Updated help text to remove uppercase requirement
         help_text="Mật khẩu phải có ít nhất 8 ký tự, chứa chữ thường, số và ký tự đặc biệt"
     )
 
@@ -99,7 +87,6 @@ class CustomerRegisterForm(forms.ModelForm):
         }
 
     def clean_full_name(self):
-        """Validate full name"""
         name = self.cleaned_data.get('full_name', '').strip()
 
         if len(name) < 2:
@@ -108,28 +95,23 @@ class CustomerRegisterForm(forms.ModelForm):
         if len(name) > 255:
             raise forms.ValidationError("Họ tên quá dài (tối đa 255 ký tự).")
 
-        # Check for special characters
         if not re.match(r"^[\w\s\-\u0100-\u01B0\u1EA0-\u1EFF]+$", name):
             raise forms.ValidationError("Họ tên chứa ký tự không hợp lệ.")
 
         return name
 
     def clean_phone(self):
-        """Validate phone number"""
         phone = self.cleaned_data.get('phone', '').strip()
 
-        # Check format
         if not phone.isdigit() or len(phone) < 10 or len(phone) > 11:
             raise forms.ValidationError("Số điện thoại không hợp lệ (phải là 10-11 chữ số).")
 
-        # Check if already registered
         if Customer.objects.filter(phone=phone).exists():
             raise forms.ValidationError("Số điện thoại này đã được đăng ký.")
 
         return phone
 
     def clean_password_confirm(self):
-        """Validate password confirmation matches"""
         password = self.cleaned_data.get('password')
         password_confirm = self.cleaned_data.get('password_confirm')
 
@@ -140,14 +122,12 @@ class CustomerRegisterForm(forms.ModelForm):
         return password_confirm
 
     def clean_website_check(self):
-        """Bot detection honeypot"""
         data = self.cleaned_data.get('website_check', '').strip()
         if data:
             raise forms.ValidationError("Đã xảy ra lỗi hệ thống (Bot detected).")
         return data
 
     def clean(self):
-        """Overall form validation"""
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
         password_confirm = cleaned_data.get('password_confirm')
@@ -159,8 +139,6 @@ class CustomerRegisterForm(forms.ModelForm):
 
 
 class CustomerLoginForm(forms.Form):
-    """Enhanced login form with security measures"""
-
     phone = forms.CharField(
         label="Số điện thoại",
         widget=forms.TextInput(attrs={
@@ -203,10 +181,7 @@ class UpdateAddressForm(forms.ModelForm):
         }
 
 
-# ✅ IMPROVED - Add password change form for account page
 class ChangePasswordForm(forms.Form):
-    """Form to change customer password"""
-
     old_password = forms.CharField(
         label="Mật khẩu cũ",
         widget=forms.PasswordInput(attrs={
@@ -237,7 +212,6 @@ class ChangePasswordForm(forms.Form):
     )
 
     def clean_new_password_confirm(self):
-        """Validate that new passwords match"""
         new_password = self.cleaned_data.get('new_password')
         new_password_confirm = self.cleaned_data.get('new_password_confirm')
 

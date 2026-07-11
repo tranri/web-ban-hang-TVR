@@ -2,10 +2,15 @@ git add .
 git commit -m "Mô tả của anh"
 git push
 
-
 python manage.py runserver
-
-
 
 python manage.py makemigrations
 python manage.py migrate
+
+
+git grep -n "days ==" || grep -R --line-number "days ==" .
+nl -ba shop/templates/admin/revenue_chart.html | sed -n '1,120p'
+git grep -l "days ==" | xargs -r sed -i.bak 's/days ==/days ==/g'
+rm shop/templates/admin/revenue_chart.html.bak
+rm shop/templates/admin/revenue_chart.html.prefixbak
+git grep -n "days ==" || grep -R --line-number "days ==" .

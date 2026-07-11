@@ -14,7 +14,6 @@ class Customer(models.Model):
     phone = models.CharField(max_length=20, unique=True, verbose_name="Số điện thoại")
     password = models.CharField(max_length=128, verbose_name="Mật khẩu")  # Sẽ lưu mật khẩu đã băm (hash)
     created_at = models.DateTimeField(auto_now_add=True)
-    email = models.EmailField(max_length=255, verbose_name="Email", null=True, blank=True)
     address = models.TextField(verbose_name="Địa chỉ", null=True, blank=True)
 
     class Meta:
@@ -32,7 +31,6 @@ class Customer(models.Model):
 
 
 class Category(models.Model):
-    # Thêm trường parent để tự liên kết tạo mối quan hệ CHA - CON
     parent = models.ForeignKey('self', null=True, blank=True, related_name='children', on_delete=models.CASCADE,
                                verbose_name="Danh mục cha (Bỏ trống nếu là danh mục gốc)")
     name = models.CharField(max_length=200, verbose_name="Tên danh mục")
@@ -45,7 +43,6 @@ class Category(models.Model):
         verbose_name_plural = 'Các danh mục'
 
     def __str__(self):
-        # Hiển thị phân cấp rõ ràng trong Admin
         if self.parent:
             return f"{self.parent.name} --> {self.name}"
         return self.name
@@ -82,7 +79,6 @@ class Product(models.Model):
 
     @property
     def discount_percentage(self):
-        # Chỉ tính khi giá cũ lớn hơn giá hiện tại và giá cũ > 0
         if self.sale_price > self.price and self.sale_price > 0:
             discount = self.sale_price - self.price
             return int((discount / self.sale_price) * 100)
@@ -110,7 +106,6 @@ class ShopConfiguration(models.Model):
     service_video = models.FileField(upload_to="services/videos/", blank=True, null=True,
                                      verbose_name="Video giới thiệu (Tải từ máy)")
 
-    # === CÁC TRƯỜNG THÊM MỚI THEO YÊU CẦU GIẤY TỜ HỘ KINH DOANH ===
     hkd_name = models.CharField(max_length=255, default="HKD Điện tử Nguyễn Hiền", verbose_name="Tên Hộ Kinh Doanh")
     registration_number = models.CharField(max_length=100, default="8426840468-001", verbose_name="Số GPĐKKD")
     registration_place = models.CharField(max_length=150, default="UBND Quận Liên Chiểu", verbose_name="Nơi cấp GPĐKKD")
@@ -125,22 +120,19 @@ class ShopConfiguration(models.Model):
 
     @staticmethod
     def get_config():
-        """Get or create shop config with caching"""
         config = cache.get('shop_config')
         if config is None:
             config = ShopConfiguration.objects.first()
             if not config:
                 config = ShopConfiguration.objects.create()
-            cache.set('shop_config', config, 3600)  # Cache for 1 hour
+            cache.set('shop_config', config, 3600)
         return config
 
     @staticmethod
     def clear_cache():
-        """Clear config cache"""
         cache.delete('shop_config')
 
 
-# Signal to clear cache when ShopConfiguration is updated
 @receiver(post_save, sender=ShopConfiguration)
 def clear_shop_config_cache(sender, instance, **kwargs):
     ShopConfiguration.clear_cache()
@@ -177,7 +169,6 @@ class DocumentPost(models.Model):
 
 class Order(models.Model):
     full_name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20)
     address = models.TextField()
     note = models.TextField(blank=True, null=True)

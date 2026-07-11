@@ -12,11 +12,14 @@ from django.db.models.functions import TruncDay, TruncMonth
 from django.db.models import Sum
 import json
 
+from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.core.exceptions import ValidationError as AdminValidationError
 
-# Cho phép thêm ảnh Banner trực tiếp trong trang cấu hình Website
+
 class BannerImageInline(admin.TabularInline):
     model = BannerImage
-    extra = 1  # Hiển thị sẵn ô để thêm ảnh mới
+    extra = 1
 
 
 @admin.register(ShopConfiguration)
@@ -35,39 +38,25 @@ class CategoryAdmin(admin.ModelAdmin):
     list_display = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
 
-    # ✅ IMPROVED - Optimize queries
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # Prefetch parent categories to avoid N+1 queries
         return qs.select_related('parent')
 
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    # Không còn CSS ẩn nút lưu nữa
-
     list_display = [
         'name', 'price', 'import_price', 'sale_price',
         'stock', 'new_import_price', 'new_stock',
         'available', 'action_button'
     ]
-
-    # Đã loại bỏ 'sale_price' khỏi list_editable để không thể sửa ở giao diện danh sách
-    list_editable = [
-        'price', 'new_import_price', 'new_stock', 'available'
-    ]
-
-    # Đã thêm 'sale_price' vào readonly_fields để khóa không cho nhập liệu thủ công
+    list_editable = ['price', 'new_import_price', 'new_stock', 'available']
     readonly_fields = ['import_price', 'stock', 'sale_price']
-
     list_filter = ['available', 'category']
-    search_fields = ['name', 'slug']  # ✅ IMPROVED - Add search for better usability
+    search_fields = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
-
-    # ✅ IMPROVED - Add pagination control
     list_per_page = 50
 
-    # Nút cập nhật trong list view
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
         return format_html('<a class="button" href="{}">Cập nhật</a>', url)
@@ -82,26 +71,18 @@ class ProductAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    # LOGIC CẬP NHẬT: Giá chưa KM luôn được cập nhật theo Giá bán khi nhấn nút này
     def update_data_view(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
-
-        # 1. Kiểm tra tồn kho
         if product.stock != 0:
             messages.error(request,
                            f"Không thể cập nhật: Tồn kho của '{product.name}' đang là {product.stock}, phải bằng 0 mới được phép cập nhật!")
             return redirect('admin:shop_product_changelist')
 
-        # 2. Thực hiện cập nhật
-        # Giá chưa KM luôn lấy bằng giá bán hiện tại
         product.sale_price = product.price
-
-        # Cập nhật giá nhập mới
         if product.new_import_price and product.new_import_price > 0:
             product.import_price = product.new_import_price
             product.new_import_price = 0
 
-        # Cập nhật số lượng mới
         product.stock = product.new_stock if product.new_stock is not None else 0
         product.new_stock = 0
 
@@ -122,67 +103,51 @@ class ProductAdmin(admin.ModelAdmin):
         form.clean_price = clean_price
         return form
 
-    # ✅ IMPROVED - Optimize queries for list view
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # Use select_related for ForeignKey (category)
         return qs.select_related('category')
 
 
-# Đăng ký trang quản lý bài viết Góc tài liệu
 @admin.register(DocumentPost)
 class DocumentPostAdmin(admin.ModelAdmin):
     list_display = ['title', 'created_at']
-    list_filter = ['created_at']  # ✅ IMPROVED - Add date filter
-    search_fields = ['title', 'slug']  # ✅ IMPROVED - Add search
+    list_filter = ['created_at']
+    search_fields = ['title', 'slug']
     prepopulated_fields = {'slug': ('title',)}
-    readonly_fields = ['created_at']  # ✅ IMPROVED - Protect system fields
+    readonly_fields = ['created_at']
 
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    # ✅ IMPROVED - Make OrderItem readonly in inline to prevent accidental edits
     readonly_fields = ['product', 'quantity', 'price']
-    can_delete = False  # Prevent deletion from inline
+    can_delete = False
 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at', 'order_status']
-    list_filter = ['created_at', 'full_name']  # ✅ IMPROVED - Better filtering
-    search_fields = ['full_name', 'phone', 'id']  # ✅ IMPROVED - Search by order ID too
-    readonly_fields = ['created_at', 'total_price', 'id']  # ✅ IMPROVED - Protect important fields
+    list_filter = ['created_at', 'full_name']
+    search_fields = ['full_name', 'phone', 'id']
+    readonly_fields = ['created_at', 'total_price', 'id']
     inlines = [OrderItemInline]
-
-    # ✅ IMPROVED - Better display of large order lists
     list_per_page = 50
-    date_hierarchy = 'created_at'  # ✅ IMPROVED - Add date navigation
+    date_hierarchy = 'created_at'
 
-    # ✅ IMPROVED - Show order status indicator
     def order_status(self, obj):
-        """Display order status with color coding"""
         if obj.total_price == 0:
             status = "Chưa thanh toán"
-            color = "#ff6b6b"  # Red
+            color = "#ff6b6b"
         else:
             status = "Đã thanh toán"
-            color = "#51cf66"  # Green
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            status
-        )
+            color = "#51cf66"
+        return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, status)
 
     order_status.short_description = "Trạng thái"
 
-    # ✅ IMPROVED - Optimize queries with select_related
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # Don't join customer as it might not exist, but prefetch OrderItems for inline
-        return qs.prefetch_related(
-            Prefetch('items', queryset=OrderItem.objects.select_related('product'))
-        )
+        return qs.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('product')))
 
     def get_urls(self):
         urls = super().get_urls()
@@ -193,12 +158,6 @@ class OrderAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def revenue_chart_view(self, request):
-        """
-        Admin view: shows revenue chart.
-        Query params:
-            days (int) - number of days to show (default 30). If >90, groups by month.
-        """
-        # parse days param
         try:
             days = int(request.GET.get('days', 30))
         except Exception:
@@ -207,9 +166,7 @@ class OrderAdmin(admin.ModelAdmin):
         now = timezone.now()
         start = now - timedelta(days=days)
 
-        # choose grouping based on period length
         if days <= 90:
-            period_func = TruncDay('created_at')
             qs = (
                 Order.objects
                 .filter(created_at__gte=start)
@@ -249,31 +206,50 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    # Hiển thị thông tin trong bảng danh sách
     list_display = ['full_name', 'phone', 'created_at', 'customer_badge']
-
-    # ✅ IMPROVED - Better filtering and search
     list_filter = ['created_at', 'phone']
-    search_fields = ['full_name', 'phone', 'email']  # ✅ IMPROVED - Search by email too
-
-    # Sắp xếp theo ngày tạo mới nhất
+    search_fields = ['full_name', 'phone']  # removed 'email'
     ordering = ['-created_at']
-
-    # ✅ IMPROVED - Better pagination for large customer lists
     list_per_page = 100
-
-    # Chặn không cho sửa mật khẩu trực tiếp (bảo mật)
     readonly_fields = ['password', 'created_at']
-
-    # ✅ IMPROVED - Add date hierarchy for easy browsing
     date_hierarchy = 'created_at'
 
-    # ✅ IMPROVED - Show customer status badge
     def customer_badge(self, obj):
-        """Display customer status"""
         return format_html(
             '<span style="background-color: #e3f2fd; padding: 3px 10px; border-radius: 3px; font-size: 12px;">{}</span>',
             f"ID: {obj.id}"
         )
 
     customer_badge.short_description = "Mã khách"
+
+
+class SafeUserAdmin(DjangoUserAdmin):
+    """Custom UserAdmin that prevents clearing the email for superusers."""
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+
+        class _SafeForm(form):
+            def clean(self_inner):
+                cleaned = super().clean()
+                email = cleaned.get('email', '')
+
+                will_be_superuser = False
+                if obj is not None and getattr(obj, 'is_superuser', False):
+                    will_be_superuser = True
+                if not will_be_superuser:
+                    will_be_superuser = cleaned.get('is_superuser', False)
+
+                if will_be_superuser and (email is None or str(email).strip() == ""):
+                    raise AdminValidationError("Cannot clear email address of a superuser.")
+
+                return cleaned
+
+        return _SafeForm
+
+
+try:
+    admin.site.unregister(User)
+except Exception:
+    pass
+admin.site.register(User, SafeUserAdmin)

@@ -165,7 +165,7 @@ def tai_khoan(request):
 
                         messages.success(request, "Mật khẩu đã được thay đổi thành công!")
                         logger.info(f"Password changed for customer: {customer.phone}")
-                        return redirect('shop:tai_khoan' + '?tab=password')
+                        return redirect(reverse('shop:tai_khoan') + '?tab=password')
                 else:
                     context['password_form'] = password_form
                     context['active_tab'] = 'password'

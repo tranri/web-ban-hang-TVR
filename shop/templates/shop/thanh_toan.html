@@ -4,7 +4,6 @@
 {% block navbar %}
 <div class="bg-white border-bottom shadow-sm py-3">
     <div class="container text-center">
-        <!-- Logo và Tên cửa hàng căn giữa -->
         <a href="/" class="d-inline-flex align-items-center text-decoration-none">
             {% if config.logo %}
             <img src="{{ config.logo.url }}" alt="Logo" style="height: 50px; width: auto; margin-right: 15px;">
@@ -19,8 +18,7 @@
 <footer class="text-center py-4 mt-5 bg-white border-top">
     <div class="container text-muted">
         <p class="mb-1 fw-bold text-dark">Cảm ơn bạn đã cho {{ config.title }} cơ hội được góp một phần nhỏ vào hành
-            trình chinh
-            phục đam mê công nghệ của bạn. </p>
+            trình chinh phục đam mê công nghệ của bạn. </p>
         <p class="mb-1 fw-bold text-dark"> Chúc bạn có những trải nghiệm tuyệt vời nhất!</p>
 
         <p class="small mb-0 fw-bold" style="color: #ff4500; letter-spacing: 1px; text-transform: uppercase;">
@@ -50,13 +48,6 @@
                     <div class="bg-white p-4 rounded shadow-sm border h-100">
                         <h5 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-success"></i> Thông tin nhận
                             hàng</h5>
-
-                        <!-- Email -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Email (Không bắt buộc)</label>
-                            <input type="email" name="email" class="form-control" placeholder="Nhập email..."
-                                   value="{% if current_customer %}{{ current_customer.email }}{% else %}{{ form.email.value|default:'' }}{% endif %}">
-                        </div>
 
                         <!-- Họ Tên -->
                         <div class="mb-3">
@@ -145,4 +136,3 @@
     </div>
 </div>
 {% endblock %}
-
