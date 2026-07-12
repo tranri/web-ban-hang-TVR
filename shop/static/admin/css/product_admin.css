@@ -1,7 +1,7 @@
 /* Product Admin List View - Compact input field sizing */
 
 /* Make list_editable input fields compact to fit 9 digits */
-.field-price input,
+
 .field-import_price input,
 .field-sale_price input,
 .field-new_import_price input,
@@ -30,3 +30,26 @@ td input[type="number"] {
 }
 
 
+/* product_admin.css */
+thead th {
+    vertical-align: middle !important;
+    line-height: 1.2 !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+}
+
+th.column-price,
+th.column-tax_rate,
+th.column-new_stock,
+th.column-new_import_price {
+    width: 70px !important;
+    white-space: normal !important; /* Cho phép xuống dòng */
+    line-height: 1.2 !important;    /* Khoảng cách dòng cho đẹp */
+    text-align: center !important;
+}
+
+.field-price input {
+    width: 65px !important;
+    padding: 3px 5px !important;
+    font-size: 12px !important;
+}

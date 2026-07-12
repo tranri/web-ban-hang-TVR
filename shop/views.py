@@ -466,8 +466,7 @@ def get_top_selling_or_random(target_count=60):
 
     top_products_ids = list(
         OrderItem.objects.filter(
-            order__created_at__gte=ba_tuan_truoc,
-            product__available=True
+            order__created_at__gte=ba_tuan_truoc
         )
         .values_list('product_id', flat=True)
         .annotate(total_sold=Sum('quantity'))
@@ -475,7 +474,7 @@ def get_top_selling_or_random(target_count=60):
     )
 
     products_from_db = list(
-        Product.objects.filter(id__in=top_products_ids, available=True)
+        Product.objects.filter(id__in=top_products_ids)
         .select_related('category')
     )
 
@@ -486,7 +485,7 @@ def get_top_selling_or_random(target_count=60):
     needed = target_count - len(products_list)
     if needed > 0:
         remaining_ids = list(
-            Product.objects.filter(available=True)
+            Product.objects.filter()
             .exclude(id__in=top_products_ids)
             .values_list('id', flat=True)
         )
@@ -515,7 +514,7 @@ def trang_chu(request):
 
     if category_slug:
         # Nếu người dùng bấm lọc danh mục: Hiển thị sản phẩm thuộc danh mục đó
-        products = Product.objects.filter(category__slug=category_slug, available=True)
+        products = Product.objects.filter(category__slug=category_slug)
         is_filtered = True
     else:
         # Nếu ở trang chủ mặc định: Hiển thị 60 sản phẩm bán chạy + ngẫu nhiên phối hợp

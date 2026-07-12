@@ -45,9 +45,9 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'price', 'import_price', 'sale_price',
-        'stock', 'new_import_price', 'new_stock',
-        'tax_rate', 'after_tax_profit_display', 'action_button'
+        'name', 'price', 'import_price_display', 'sale_price_display',
+        'stock_display', 'new_import_price', 'new_stock', 'action_button',
+        'tax_rate', 'after_tax_profit_display'
     ]
     list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate']
     readonly_fields = ['import_price', 'stock', 'sale_price']
@@ -55,6 +55,18 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
     list_per_page = 50
+
+    @admin.display(description=mark_safe("Giá Nhập<br>(VNĐ)"))
+    def import_price_display(self, obj):
+        return f"{obj.import_price:,.0f}".replace(",", ".")
+
+    @admin.display(description=mark_safe("Giá Bán Cũ<br>(VNĐ)"))
+    def sale_price_display(self, obj):
+        return f"{obj.sale_price:,.0f}".replace(",", ".")
+
+    @admin.display(description=mark_safe("Số Lượng<br>Tồn Kho<br>(cái)"))
+    def stock_display(self, obj):
+        return f"{obj.stock:,.0f}".replace(",", ".")
 
     class Media:
         css = {
@@ -78,13 +90,13 @@ class ProductAdmin(admin.ModelAdmin):
             return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, profit_str)
         return "-"
 
-    after_tax_profit_display.short_description = mark_safe("Lợi nhuận sau thuế<br/>(VNĐ)")
+    after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>sau thuế<br>(VNĐ)")
 
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
-        return format_html('<a class="button" href="{}">Cập nhật</a>', url)
+        return format_html('<a class="button" href="{}">CHUYỂN</a>', url)
 
-    action_button.short_description = "Hành động"
+    action_button.short_description = "Cập nhật"
 
     def get_urls(self):
         urls = super().get_urls()

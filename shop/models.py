@@ -59,15 +59,14 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán (VNĐ)")
     import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Nhập (VNĐ)")
     sale_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán Cũ (VNĐ)")
-    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho")
+    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho (cái)")
 
     new_import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, blank=True, null=True,
                                            verbose_name="Giá Nhập Mới (VNĐ)")
-    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới")
+    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới (cái)")
 
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Thuế (%)")
 
-    available = models.BooleanField(default=True, verbose_name="Hiển thị/Bán")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Ngày cập nhật")
 
@@ -88,7 +87,6 @@ class Product(models.Model):
 
     @property
     def after_tax_profit(self):
-        """Calculate after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
         if self.price and self.import_price:
             tax_amount = self.price * (self.tax_rate / 100)
             profit = self.price - self.import_price - tax_amount

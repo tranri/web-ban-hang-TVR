@@ -2,11 +2,12 @@ git add .
 git commit -m "Mô tả của anh"
 git push
 
-python manage.py runserver
+
 
 python manage.py makemigrations
 python manage.py migrate
 
+python manage.py runserver
 
 git grep -n "days ==" || grep -R --line-number "days ==" .
 nl -ba shop/templates/admin/revenue_chart.html | sed -n '1,120p'
