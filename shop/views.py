@@ -72,27 +72,23 @@ def build_render_context(request, template_name, **kwargs):
 
 # ✅ IMPROVED - Helper function to create and manage user session
 def create_user_session(request, customer):
-    """
-    Create a secure session for the authenticated customer
-    Used in both login and registration flows
-    """
-    # 1. Regenerate session ID to prevent session fixation
-    request.session.create()
+    try:
+        request.session.cycle_key()
+    except Exception:
+        # Ensure a session exists if cycle_key is not available for some reason
+        if not request.session.session_key:
+            request.session.create()
 
-    # 2. Store customer info in session
+    # Store customer info in safe, custom session keys (no _auth* keys!)
     request.session['customer_id'] = customer.id
     request.session['customer_name'] = customer.full_name
     request.session['customer_phone'] = customer.phone
 
-    # 3. Set session expiration (30 minutes by default)
+    # Optional small hash to help verify the session belongs to this customer in application code
+    request.session['customer_auth_hash'] = customer.password[:10]
+
+    # Set session expiry for customer sessions (seconds)
     request.session.set_expiry(1800)  # 30 minutes
-
-    # 4. Mark as persistent login (optional - user stays logged in)
-    # request.session.set_expiry(604800)  # 7 days
-
-    # 5. Set secure flags
-    request.session['_auth_user_id'] = customer.id
-    request.session['_auth_user_hash'] = customer.password[:10]
 
     logger.info(f"Session created for customer: {customer.phone}")
 
