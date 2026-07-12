@@ -85,7 +85,7 @@ def create_user_session(request, customer):
     request.session['customer_phone'] = customer.phone
 
     # Optional small hash to help verify the session belongs to this customer in application code
-    request.session['customer_auth_hash'] = customer.password[:10]
+    # request.session['customer_auth_hash'] = customer.password[:10]
 
     # Set session expiry for customer sessions (seconds)
     request.session.set_expiry(1800)  # 30 minutes

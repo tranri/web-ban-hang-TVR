@@ -159,12 +159,16 @@ class OrderAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
 
     def order_status(self, obj):
-        if obj.total_price == 0:
-            status = "Chưa thanh toán"
-            color = "#ff6b6b"
+        now = timezone.now()
+        time_diff = now - obj.created_at
+
+        if time_diff < timedelta(days=7):
+            status = "Đang xử lý"
+            color = "#ffc107"  # Yellow
         else:
-            status = "Đã thanh toán"
-            color = "#51cf66"
+            status = "Hoàn thành"
+            color = "#51cf66"  # Green
+
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, status)
 
     order_status.short_description = "Trạng thái"
@@ -172,60 +176,6 @@ class OrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('product')))
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('revenue-chart/', self.admin_site.admin_view(self.revenue_chart_view),
-                 name='shop_order_revenue_chart'),
-        ]
-        return custom_urls + urls
-
-    def revenue_chart_view(self, request):
-        try:
-            days = int(request.GET.get('days', 30))
-        except Exception:
-            days = 30
-
-        now = timezone.now()
-        start = now - timedelta(days=days)
-
-        if days <= 90:
-            qs = (
-                Order.objects
-                .filter(created_at__gte=start)
-                .annotate(period=TruncDay('created_at'))
-                .values('period')
-                .annotate(total=Sum('total_price'))
-                .order_by('period')
-            )
-            labels = [item['period'].date().isoformat() for item in qs]
-        else:
-            qs = (
-                Order.objects
-                .filter(created_at__gte=start)
-                .annotate(period=TruncMonth('created_at'))
-                .values('period')
-                .annotate(total=Sum('total_price'))
-                .order_by('period')
-            )
-            labels = [item['period'].date().strftime('%Y-%m') for item in qs]
-
-        data = [float(item['total'] or 0) for item in qs]
-
-        context = {
-            'labels_json': json.dumps(labels),
-            'data_json': json.dumps(data),
-            'days': days,
-            'title': f'Revenue (last {days} days)',
-        }
-        return render(request, 'admin/revenue_chart.html', context)
-
-    def changelist_view(self, request, extra_context=None):
-        if extra_context is None:
-            extra_context = {}
-        extra_context['revenue_chart_url'] = reverse('admin:shop_order_revenue_chart')
-        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(Customer)
