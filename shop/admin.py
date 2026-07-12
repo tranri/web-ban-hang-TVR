@@ -45,11 +45,11 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'price', 'import_price_display', 'sale_price_display',
+        'name', 'price', 'sale_price_display', 'import_price_display',
         'stock_display', 'new_import_price', 'new_stock', 'action_button',
-        'tax_rate', 'after_tax_profit_display'
+        'tax_rate', 'after_tax_profit_display', 'defective_quantity', 'subtract_defective_button'
     ]
-    list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate']
+    list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate', 'defective_quantity']
     readonly_fields = ['import_price', 'stock', 'sale_price']
     list_filter = ['category']
     search_fields = ['name', 'slug']
@@ -92,6 +92,13 @@ class ProductAdmin(admin.ModelAdmin):
 
     after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>sau thuế<br>(VNĐ)")
 
+    def subtract_defective_button(self, obj):
+        """Display subtract button for defective products"""
+        url = reverse('admin:product_subtract_defective', args=[obj.pk])
+        return format_html('<a class="button" href="{}">Trừ</a>', url)
+
+    subtract_defective_button.short_description = "TRỪ HÀNG LỖI"
+
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
         return format_html('<a class="button" href="{}">CHUYỂN</a>', url)
@@ -103,6 +110,8 @@ class ProductAdmin(admin.ModelAdmin):
         custom_urls = [
             path('<path:object_id>/update-data/', self.admin_site.admin_view(self.update_data_view),
                  name='product_update_data'),
+            path('<path:object_id>/subtract-defective/', self.admin_site.admin_view(self.subtract_defective_view),
+                 name='product_subtract_defective'),
         ]
         return custom_urls + urls
 
@@ -137,6 +146,38 @@ class ProductAdmin(admin.ModelAdmin):
 
         product.save()
         messages.success(request, f"Đã cập nhật thành công sản phẩm: {product.name}")
+
+        return redirect('admin:shop_product_changelist')
+
+    def subtract_defective_view(self, request, object_id):
+        """Handle subtracting defective quantity from inventory"""
+        product = get_object_or_404(Product, pk=object_id)
+        defective_qty = product.defective_quantity if product.defective_quantity else 0
+
+        # Check if defective_quantity is greater than 0
+        if defective_qty == 0:
+            messages.error(request,
+                           f"Không thể trừ hàng lỗi: Số lượng hàng lỗi của '{product.name}' phải lớn hơn 0!")
+            return redirect('admin:shop_product_changelist')
+
+        # Check if stock is sufficient
+        if product.stock < defective_qty:
+            messages.error(request,
+                           f"Không thể trừ hàng lỗi: Tồn kho của '{product.name}' là {product.stock}, nhỏ hơn số lượng hàng lỗi {defective_qty}!")
+            return redirect('admin:shop_product_changelist')
+
+        try:
+            with transaction.atomic():
+                # Subtract defective quantity from stock
+                product.stock -= defective_qty
+                # Reset defective_quantity to 0
+                product.defective_quantity = 0
+                product.save()
+
+                messages.success(request,
+                                 f"Đã trừ thành công {defective_qty} sản phẩm lỗi của '{product.name}'. Tồn kho hiện tại: {product.stock}")
+        except Exception as e:
+            messages.error(request, f"Lỗi khi trừ hàng lỗi: {str(e)}")
 
         return redirect('admin:shop_product_changelist')
 

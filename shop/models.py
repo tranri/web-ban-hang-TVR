@@ -66,6 +66,7 @@ class Product(models.Model):
     new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới (cái)")
 
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Thuế (%)")
+    defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Ngày cập nhật")

@@ -1,7 +1,7 @@
 /* Product Admin List View - Compact input field sizing */
 
 /* Make list_editable input fields compact to fit 9 digits */
-
+.field-defective_quantity input,
 .field-import_price input,
 .field-sale_price input,
 .field-new_import_price input,
@@ -38,6 +38,7 @@ thead th {
     padding-bottom: 5px !important;
 }
 
+th.column-defective_quantity,
 th.column-price,
 th.column-tax_rate,
 th.column-new_stock,
