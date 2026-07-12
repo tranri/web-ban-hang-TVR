@@ -3,14 +3,11 @@ from .models import Category, Product, ShopConfiguration, BannerImage, DocumentP
 from django import forms
 from django.utils.html import format_html
 from django.urls import reverse, path
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.db.models import Prefetch
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models.functions import TruncDay, TruncMonth
-from django.db.models import Sum
-import json
 
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin

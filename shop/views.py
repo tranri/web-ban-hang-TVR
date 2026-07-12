@@ -1,4 +1,3 @@
-import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem, Customer
@@ -7,19 +6,16 @@ from django.utils import timezone
 from django.db.models import Sum
 from django.urls import reverse
 from django.contrib import messages
-from django.contrib.auth.hashers import make_password
 import random, logging
 from django.db import transaction
-from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm, ChangePasswordForm
+from .forms import OrderForm, UpdateAddressForm, ChangePasswordForm
 import requests
 import threading
 from django.conf import settings
-from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from django.views.decorators.cache import never_cache
 from django.contrib.messages import get_messages
-from django.contrib import messages as django_messages
 
 logger = logging.getLogger(__name__)
 
