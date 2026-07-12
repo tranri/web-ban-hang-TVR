@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.db.models import Prefetch
 from django.utils import timezone
+from django.db import transaction
 from datetime import timedelta
 
 from django.contrib.auth.models import User
@@ -147,7 +148,7 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at', 'order_status']
+    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at', 'order_status', 'order_actions']
     list_filter = ['created_at', 'full_name']
     search_fields = ['full_name', 'phone', 'id']
     readonly_fields = ['created_at', 'total_price', 'id']
@@ -169,6 +170,60 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, status)
 
     order_status.short_description = "Trạng thái"
+
+    def order_actions(self, obj):
+        """Display action buttons for the order"""
+        now = timezone.now()
+        time_diff = now - obj.created_at
+
+        # Only show return button if order status is "Đang xử lý" (less than 7 days)
+        if time_diff < timedelta(days=7):
+            url = reverse('admin:order_return_action', args=[obj.pk])
+            return format_html('<a class="button" href="{}">Hoàn trả</a>', url)
+        else:
+            return "-"
+
+    order_actions.short_description = "Hành động"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('<path:object_id>/return-action/', self.admin_site.admin_view(self.return_action_view),
+                 name='order_return_action'),
+        ]
+        return custom_urls + urls
+
+    def return_action_view(self, request, object_id):
+        """Handle order return: restore product quantities and delete the order"""
+        order = get_object_or_404(Order, pk=object_id)
+        now = timezone.now()
+        time_diff = now - order.created_at
+
+        if time_diff >= timedelta(days=5):
+            messages.error(request,
+                           f"Không thể hoàn trả: Đơn hàng '{order.id}' đã hoàn thành và không thể hoàn trả!")
+            return redirect('admin:shop_order_changelist')
+
+        try:
+            with transaction.atomic():
+                # Get all order items
+                order_items = OrderItem.objects.filter(order=order).select_related('product')
+
+                # Restore product quantities
+                for order_item in order_items:
+                    product = order_item.product
+                    product.stock += order_item.quantity
+                    product.save()
+
+                # Delete the order (order items will be deleted automatically due to CASCADE)
+                order.delete()
+
+                messages.success(request,
+                                 f"Đã hoàn trả thành công đơn hàng #{object_id}. Số lượng sản phẩm đã được khôi phục.")
+        except Exception as e:
+            messages.error(request, f"Lỗi khi hoàn trả đơn hàng: {str(e)}")
+
+        return redirect('admin:shop_order_changelist')
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
