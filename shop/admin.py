@@ -46,24 +46,33 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'price', 'import_price', 'sale_price',
         'stock', 'new_import_price', 'new_stock',
-        'profit_margin_percentage', 'action_button'
+        'tax_rate', 'after_tax_profit_display', 'action_button'
     ]
-    list_editable = ['price', 'new_import_price', 'new_stock']
+    list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate']
     readonly_fields = ['import_price', 'stock', 'sale_price']
     list_filter = ['category']
     search_fields = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
     list_per_page = 50
 
-    def profit_margin_percentage(self, obj):
-        """Calculate and display the profit margin percentage between purchase price and selling price"""
-        if obj.import_price and obj.import_price > 0:
-            margin = ((obj.price - obj.import_price) / obj.import_price) * 100
-            margin_str = f"{margin:.1f}%"
-            return format_html('<span style="color: #ff0000; font-weight: bold;">{}</span>', margin_str)
+    def after_tax_profit_display(self, obj):
+        """Display after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
+        if obj.price and obj.import_price:
+            tax_amount = obj.price * (obj.tax_rate / 100)
+            profit = obj.price - obj.import_price - tax_amount
+            profit_int = int(profit)
+
+            # Color code: green for positive, red for negative
+            if profit_int >= 0:
+                color = "#51cf66"  # Green
+            else:
+                color = "#ff6b6b"  # Red
+
+            profit_str = f"{profit_int:,}đ".replace(",", ".")
+            return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, profit_str)
         return "-"
 
-    profit_margin_percentage.short_description = "Lợi nhuận (%)"
+    after_tax_profit_display.short_description = "Lợi nhuận sau thuế (VNĐ)"
 
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
@@ -199,7 +208,8 @@ class OrderAdmin(admin.ModelAdmin):
         now = timezone.now()
         time_diff = now - order.created_at
 
-        if time_diff >= timedelta(days=5):
+        # Check if order status is "Đang xử lý" (less than 7 days)
+        if time_diff >= timedelta(days=7):
             messages.error(request,
                            f"Không thể hoàn trả: Đơn hàng '{order.id}' đã hoàn thành và không thể hoàn trả!")
             return redirect('admin:shop_order_changelist')

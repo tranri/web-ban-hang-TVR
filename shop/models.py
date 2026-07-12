@@ -65,6 +65,8 @@ class Product(models.Model):
                                            verbose_name="Giá Nhập Mới (VNĐ)")
     new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới")
 
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Thuế (%)")
+
     available = models.BooleanField(default=True, verbose_name="Hiển thị/Bán")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Ngày cập nhật")
@@ -82,6 +84,15 @@ class Product(models.Model):
         if self.sale_price > self.price and self.sale_price > 0:
             discount = self.sale_price - self.price
             return int((discount / self.sale_price) * 100)
+        return 0
+
+    @property
+    def after_tax_profit(self):
+        """Calculate after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
+        if self.price and self.import_price:
+            tax_amount = self.price * (self.tax_rate / 100)
+            profit = self.price - self.import_price - tax_amount
+            return int(profit)
         return 0
 
 
