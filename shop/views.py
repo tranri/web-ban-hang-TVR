@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem, Customer
@@ -6,16 +7,20 @@ from django.utils import timezone
 from django.db.models import Sum
 from django.urls import reverse
 from django.contrib import messages
+from django.contrib.auth.hashers import make_password
 import random, logging
 from django.db import transaction
-from .forms import OrderForm, UpdateAddressForm, ChangePasswordForm
+from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm, ChangePasswordForm
 import requests
 import threading
 from django.conf import settings
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from django.views.decorators.cache import never_cache
 from django.contrib.messages import get_messages
+from django.contrib import messages as django_messages
+from django.middleware.csrf import get_token
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +71,19 @@ def build_render_context(request, template_name, **kwargs):
     return context
 
 
+# Session helpers for customer-only session data
+CUSTOMER_SESSION_KEYS = ['customer_id', 'customer_name', 'customer_phone', 'customer_auth_hash']
+
+
+def clear_customer_session(request):
+    """Remove only customer-specific keys from the session without touching Django auth keys."""
+    for k in CUSTOMER_SESSION_KEYS:
+        request.session.pop(k, None)
+    # Optionally clear the shopping cart associated with customer
+    request.session.pop('cart', None)
+    request.session.modified = True
+
+
 # ✅ IMPROVED - Helper function to create and manage user session
 def create_user_session(request, customer):
     try:
@@ -75,13 +93,20 @@ def create_user_session(request, customer):
         if not request.session.session_key:
             request.session.create()
 
+    # Ensure CSRF token is fresh after session rotation
+    try:
+        get_token(request)
+    except Exception:
+        # If CSRF middleware isn't active, skip
+        pass
+
     # Store customer info in safe, custom session keys (no _auth* keys!)
     request.session['customer_id'] = customer.id
     request.session['customer_name'] = customer.full_name
     request.session['customer_phone'] = customer.phone
 
     # Optional small hash to help verify the session belongs to this customer in application code
-    # request.session['customer_auth_hash'] = customer.password[:10]
+    request.session['customer_auth_hash'] = customer.password[:10]
 
     # Set session expiry for customer sessions (seconds)
     request.session.set_expiry(1800)  # 30 minutes
@@ -107,7 +132,8 @@ def tai_khoan(request):
         if stored_phone != customer.phone:
             # Session data mismatch - potential tampering
             logger.warning(f"Session integrity check failed for customer {customer_id}")
-            request.session.flush()
+            # Clear only customer session keys instead of flushing the entire session
+            clear_customer_session(request)
             messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
             return redirect('shop:dang_nhap')
 
@@ -193,7 +219,8 @@ def tai_khoan(request):
 
     except Customer.DoesNotExist:
         logger.warning(f"Account page - customer {customer_id} not found")
-        request.session.flush()
+        # Clear only customer session keys to avoid logging out admin
+        clear_customer_session(request)
         messages.error(request, "Tài khoản không tồn tại.")
         return redirect('shop:dang_nhap')
 
@@ -288,11 +315,7 @@ def dang_xuat(request):
 
     customer_name = request.session.get('customer_name')
 
-    # Flush the session (rotates key and clears server-stored session data)
-    request.session.flush()
-
-    # Now add a fresh logout confirmation (only this message will remain)
-    # django_messages.success(request, "Đã đăng xuất thành công!")
+    clear_customer_session(request)
 
     logger.info(f"Customer logged out: {customer_name}")
     return redirect('shop:trang_chu')
