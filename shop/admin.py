@@ -9,6 +9,7 @@ from django.db.models import Prefetch
 from django.utils import timezone
 from django.db import transaction
 from datetime import timedelta
+from django.utils.safestring import mark_safe
 
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
@@ -55,6 +56,11 @@ class ProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     list_per_page = 50
 
+    class Media:
+        css = {
+            'all': ('admin/css/product_admin.css',)
+        }
+
     def after_tax_profit_display(self, obj):
         """Display after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
         if obj.price and obj.import_price:
@@ -72,7 +78,7 @@ class ProductAdmin(admin.ModelAdmin):
             return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, profit_str)
         return "-"
 
-    after_tax_profit_display.short_description = "Lợi nhuận sau thuế (VNĐ)"
+    after_tax_profit_display.short_description = mark_safe("Lợi nhuận sau thuế<br/>(VNĐ)")
 
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])

@@ -1,0 +1,30 @@
+/* Product Admin List View - Compact input field sizing */
+
+/* Make list_editable input fields compact to fit 9 digits */
+.field-price input,
+.field-import_price input,
+.field-sale_price input,
+.field-new_import_price input,
+.field-new_stock input,
+.field-stock input,
+.field-tax_rate input {
+    width: 70px !important;
+    padding: 3px 5px !important;
+    font-size: 12px !important;
+}
+
+.field-new_stock input,
+.field-stock input {
+    width: 70px !important;
+}
+
+.field-tax_rate input {
+    width: 60px !important;
+}
+
+/* Additional refinements for admin table */
+td input[type="text"],
+td input[type="number"] {
+    max-width: 100px;
+    box-sizing: border-box;
+}
