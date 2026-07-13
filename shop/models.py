@@ -197,9 +197,15 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey('Product', on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
-    price = models.DecimalField(max_digits=12, decimal_places=0)
+    # Thêm verbose_name cho từng trường
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, verbose_name="Sản phẩm")
+    quantity = models.PositiveIntegerField(verbose_name="Số lượng")
+    price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Giá")
+
+    class Meta:
+        verbose_name = "Mục hàng"
+        # Dòng này sẽ thay đổi tiêu đề "ORDER ITEMS" thành "Chi tiết đơn hàng"
+        verbose_name_plural = "Chi tiết đơn hàng"
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"

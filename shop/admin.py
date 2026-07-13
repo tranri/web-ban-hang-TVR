@@ -242,7 +242,7 @@ class OrderAdmin(admin.ModelAdmin):
         limit = timedelta(days=5)
 
         if time_diff < limit:
-            remaining_days = (limit - time_diff).days
+            remaining_days = (limit - time_diff).days + 1
             status = f"Đang xử lý - (còn {remaining_days} ngày)"
             color = "#ffc107"  # Yellow
         else:
