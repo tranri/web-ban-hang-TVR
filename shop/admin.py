@@ -93,7 +93,7 @@ class ProductAdmin(admin.ModelAdmin):
 
             # Truyền chuỗi đã định dạng sẵn vào format_html
             return format_html(
-                '<span style="color: {}; font-weight: bold;">{} ({})</span>',
+                '<span style="color: {}; font-weight: bold;">{} -> ({})</span>',
                 color, profit_str, percentage_str
             )
         return "-"
@@ -224,7 +224,7 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price', 'created_at', 'order_status', 'order_actions']
+    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status', 'order_actions']
     list_filter = ['created_at', 'full_name']
     search_fields = ['full_name', 'phone', 'id']
     readonly_fields = ['created_at', 'total_price', 'id']
@@ -232,12 +232,18 @@ class OrderAdmin(admin.ModelAdmin):
     list_per_page = 50
     date_hierarchy = 'created_at'
 
+    @admin.display(description="Tổng tiền")
+    def total_price_display(self, obj):
+        return f"{obj.total_price:,.0f}".replace(",", ".")
+
     def order_status(self, obj):
         now = timezone.now()
         time_diff = now - obj.created_at
+        limit = timedelta(days=5)
 
-        if time_diff < timedelta(days=7):
-            status = "Đang xử lý"
+        if time_diff < limit:
+            remaining_days = (limit - time_diff).days
+            status = f"Đang xử lý - (còn {remaining_days} ngày)"
             color = "#ffc107"  # Yellow
         else:
             status = "Hoàn thành"

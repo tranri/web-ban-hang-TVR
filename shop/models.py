@@ -84,7 +84,7 @@ class Product(models.Model):
     def discount_percentage(self):
         if self.sale_price > self.price and self.sale_price > 0:
             discount = self.sale_price - self.price
-            return int((discount / self.sale_price) * 100)
+            return int((discount / self.price) * 100)
         return 0
 
     @property
@@ -179,12 +179,17 @@ class DocumentPost(models.Model):
 
 
 class Order(models.Model):
-    full_name = models.CharField(max_length=255)
-    phone = models.CharField(max_length=20)
-    address = models.TextField()
-    note = models.TextField(blank=True, null=True)
-    total_price = models.DecimalField(max_digits=12, decimal_places=0)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # Thêm verbose_name vào các trường
+    full_name = models.CharField(max_length=255, verbose_name="Họ và tên")
+    phone = models.CharField(max_length=20, verbose_name="Số điện thoại")
+    address = models.TextField(verbose_name="Địa chỉ")
+    note = models.TextField(blank=True, null=True, verbose_name="Ghi chú")
+    total_price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tổng tiền")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày có đơn hàng")
+
+    class Meta:
+        verbose_name = "Đơn hàng"
+        verbose_name_plural = "Quản lý đơn hàng"
 
     def __str__(self):
         return f"Đơn hàng {self.id} - {self.full_name}"
