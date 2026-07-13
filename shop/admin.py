@@ -76,19 +76,26 @@ class ProductAdmin(admin.ModelAdmin):
 
     def after_tax_profit_display(self, obj):
         """Display after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
-        if obj.price and obj.import_price:
+        if obj.price and obj.import_price and obj.price > 0:
             tax_amount = obj.price * (obj.tax_rate / 100)
             profit = obj.price - obj.import_price - tax_amount
             profit_int = int(profit)
 
+            # Tính phần trăm
+            percentage = (profit / obj.price) * 100
+            # Tạo chuỗi phần trăm trước để tránh lỗi định dạng trong format_html
+            percentage_str = f"{percentage:.1f}%"
+
             # Color code: green for positive, red for negative
-            if profit_int >= 0:
-                color = "#51cf66"  # Green
-            else:
-                color = "#ff6b6b"  # Red
+            color = "#51cf66" if profit_int >= 0 else "#ff6b6b"
 
             profit_str = f"{profit_int:,}đ".replace(",", ".")
-            return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, profit_str)
+
+            # Truyền chuỗi đã định dạng sẵn vào format_html
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{} ({})</span>',
+                color, profit_str, percentage_str
+            )
         return "-"
 
     after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>sau thuế<br>(VNĐ)")
