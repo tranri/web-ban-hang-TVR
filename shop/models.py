@@ -50,6 +50,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE, verbose_name="Danh mục")
+    code = models.CharField(max_length=100, unique=True, verbose_name="Mã sản phẩm", null=True, blank=True)
     name = models.CharField(max_length=200, verbose_name="Tên sản phẩm")
     slug = models.SlugField(max_length=200, unique=True, verbose_name="Đường dẫn (Slug)")
     image = models.ImageField(upload_to="products/%Y/%m/%d", blank=True, null=True, verbose_name="Hình ảnh")
@@ -59,13 +60,13 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán (VNĐ)")
     import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Nhập (VNĐ)")
     sale_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán Cũ (VNĐ)")
-    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho (cái)")
+    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho")
 
     new_import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, blank=True, null=True,
                                            verbose_name="Giá Nhập Mới (VNĐ)")
-    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới (cái)")
+    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới")
 
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Thuế (%)")
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="Thuế (%)")
     defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")

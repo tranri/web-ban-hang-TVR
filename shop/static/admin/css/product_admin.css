@@ -1,6 +1,7 @@
 /* Product Admin List View - Compact input field sizing */
 
 /* Make list_editable input fields compact to fit 9 digits */
+.field-code input,
 .field-defective_quantity input,
 .field-import_price input,
 .field-sale_price input,
@@ -8,18 +9,18 @@
 .field-new_stock input,
 .field-stock input,
 .field-tax_rate input {
-    width: 70px !important;
+    width: 60px !important;
     padding: 3px 5px !important;
     font-size: 12px !important;
 }
 
-.field-new_stock input,
-.field-stock input {
-    width: 70px !important;
+.field-defective_quantity input,
+.field-new_stock input {
+    width: 50px !important;
 }
 
 .field-tax_rate input {
-    width: 60px !important;
+    width: 40px !important;
 }
 
 /* Additional refinements for admin table */
@@ -37,13 +38,13 @@ thead th {
     padding-top: 5px !important;
     padding-bottom: 5px !important;
 }
-
+th.column-code,
 th.column-defective_quantity,
 th.column-price,
 th.column-tax_rate,
 th.column-new_stock,
 th.column-new_import_price {
-    width: 70px !important;
+    width: 65px !important;
     white-space: normal !important; /* Cho phép xuống dòng */
     line-height: 1.2 !important;    /* Khoảng cách dòng cho đẹp */
     text-align: center !important;
@@ -53,4 +54,15 @@ th.column-new_import_price {
     width: 65px !important;
     padding: 3px 5px !important;
     font-size: 12px !important;
+}
+
+/* Buộc ẩn mũi tên bằng !important */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+}
+
+input[type=number] {
+    -moz-appearance: textfield !important;
 }

@@ -45,12 +45,12 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'price', 'sale_price_display', 'import_price_display',
+        'name', 'code', 'price', 'sale_price_display', 'import_price_display',
         'stock_display', 'new_import_price', 'new_stock', 'action_button',
         'defective_quantity', 'subtract_defective_button',
         'tax_rate', 'after_tax_profit_display'
     ]
-    list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate', 'defective_quantity']
+    list_editable = ['code', 'price', 'new_import_price', 'new_stock', 'tax_rate', 'defective_quantity']
     readonly_fields = ['import_price', 'stock', 'sale_price']
     list_filter = ['category']
     search_fields = ['name', 'slug']
@@ -65,7 +65,7 @@ class ProductAdmin(admin.ModelAdmin):
     def sale_price_display(self, obj):
         return f"{obj.sale_price:,.0f}".replace(",", ".")
 
-    @admin.display(description=mark_safe("Số Lượng<br>Tồn Kho<br>(cái)"))
+    @admin.display(description=mark_safe("Số Lượng<br>Tồn Kho"))
     def stock_display(self, obj):
         return f"{obj.stock:,.0f}".replace(",", ".")
 
