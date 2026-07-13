@@ -3,7 +3,6 @@ git commit -m "Mô tả của anh"
 git push
 
 
-
 python manage.py makemigrations
 python manage.py migrate
 

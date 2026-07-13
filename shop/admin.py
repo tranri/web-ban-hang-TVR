@@ -47,7 +47,8 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'price', 'sale_price_display', 'import_price_display',
         'stock_display', 'new_import_price', 'new_stock', 'action_button',
-        'tax_rate', 'after_tax_profit_display', 'defective_quantity', 'subtract_defective_button'
+        'defective_quantity', 'subtract_defective_button',
+        'tax_rate', 'after_tax_profit_display'
     ]
     list_editable = ['price', 'new_import_price', 'new_stock', 'tax_rate', 'defective_quantity']
     readonly_fields = ['import_price', 'stock', 'sale_price']
@@ -97,7 +98,7 @@ class ProductAdmin(admin.ModelAdmin):
         url = reverse('admin:product_subtract_defective', args=[obj.pk])
         return format_html('<a class="button" href="{}">Trừ</a>', url)
 
-    subtract_defective_button.short_description = "TRỪ HÀNG LỖI"
+    subtract_defective_button.short_description = mark_safe("TRỪ<br>HÀNG LỖI")
 
     def action_button(self, obj):
         url = reverse('admin:product_update_data', args=[obj.pk])
