@@ -69,11 +69,8 @@ class Product(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="Thuế (%)")
     defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
 
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày tạo")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Ngày cập nhật")
-
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['name']
         verbose_name = 'Sản phẩm'
         verbose_name_plural = 'Các sản phẩm'
 
