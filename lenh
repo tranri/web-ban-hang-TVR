@@ -14,3 +14,12 @@ git grep -l "days ==" | xargs -r sed -i.bak 's/days ==/days ==/g'
 rm shop/templates/admin/revenue_chart.html.bak
 rm shop/templates/admin/revenue_chart.html.prefixbak
 git grep -n "days ==" || grep -R --line-number "days ==" .
+
+1/----------------------------------
+####thời gian hoàn hàng là 5 ngày , chỉnh thời gian tích điểm trong models.py   --- class Order(models.Model):#######
+    def is_completed(self):
+        now = timezone.now()
+        return (now - self.created_at) >= timedelta(seconds=5)  # days=5
+############################################
+*******  khi nào bán hàng thực tế hãy hỏi genimi: "làm cách nào để tự động cập nhập điểm"
+----------------------------------------------

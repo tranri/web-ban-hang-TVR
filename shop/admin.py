@@ -224,7 +224,8 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status', 'order_actions']
+    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status', 'points_awarded',
+                    'awarded_points', 'order_actions']
     list_filter = ['created_at', 'full_name']
     search_fields = ['full_name', 'phone', 'id']
     readonly_fields = ['created_at', 'total_price', 'id']
@@ -258,8 +259,7 @@ class OrderAdmin(admin.ModelAdmin):
         now = timezone.now()
         time_diff = now - obj.created_at
 
-        # Only show return button if order status is "Đang xử lý" (less than 7 days)
-        if time_diff < timedelta(days=7):
+        if time_diff < timedelta(days=5):
             url = reverse('admin:order_return_action', args=[obj.pk])
             return format_html('<a class="button" href="{}">Hoàn trả</a>', url)
         else:
@@ -281,28 +281,37 @@ class OrderAdmin(admin.ModelAdmin):
         now = timezone.now()
         time_diff = now - order.created_at
 
-        # Check if order status is "Đang xử lý" (less than 7 days)
-        if time_diff >= timedelta(days=7):
+        if time_diff >= timedelta(days=5):
             messages.error(request,
                            f"Không thể hoàn trả: Đơn hàng '{order.id}' đã hoàn thành và không thể hoàn trả!")
             return redirect('admin:shop_order_changelist')
 
         try:
             with transaction.atomic():
-                # Get all order items
+                # 1. Hoàn lại số lượng tồn kho sản phẩm
                 order_items = OrderItem.objects.filter(order=order).select_related('product')
-
-                # Restore product quantities
                 for order_item in order_items:
                     product = order_item.product
                     product.stock += order_item.quantity
                     product.save()
 
-                # Delete the order (order items will be deleted automatically due to CASCADE)
+                # 2. XỬ LÝ TRỪ ĐIỂM TÍCH LŨY (NẾU ĐƠN HÀNG ĐÃ ĐƯỢC CỘNG ĐIỂM)
+                if getattr(order, 'points_awarded', False) and order.awarded_points and order.awarded_points > 0:
+                    # Chuẩn hóa số điện thoại để tránh lỗi lệch khoảng trắng hoặc định dạng
+                    clean_phone = str(order.phone).strip() if order.phone else ""
+
+                    if clean_phone:
+                        customer = Customer.objects.filter(phone=clean_phone).first()
+                        if customer:
+                            # Trừ điểm nhưng đảm bảo điểm của khách không bị âm (< 0)
+                            customer.points = max(0, customer.points - order.awarded_points)
+                            customer.save(update_fields=['points'])
+
+                # 3. Xóa đơn hàng
                 order.delete()
 
                 messages.success(request,
-                                 f"Đã hoàn trả thành công đơn hàng #{object_id}. Số lượng sản phẩm đã được khôi phục.")
+                                 f"Đã hoàn trả thành công đơn hàng #{object_id}. Đã khôi phục tồn kho và thu hồi điểm tích lũy tương ứng.")
         except Exception as e:
             messages.error(request, f"Lỗi khi hoàn trả đơn hàng: {str(e)}")
 
@@ -315,9 +324,9 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone', 'created_at', 'customer_badge']
+    list_display = ['full_name', 'phone', 'created_at', 'customer_badge', 'points']
     list_filter = ['created_at', 'phone']
-    search_fields = ['full_name', 'phone']  # removed 'email'
+    search_fields = ['full_name', 'phone']
     ordering = ['-created_at']
     list_per_page = 100
     readonly_fields = ['password', 'created_at']

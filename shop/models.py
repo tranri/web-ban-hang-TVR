@@ -3,6 +3,9 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.cache import cache
+from decimal import Decimal
+from django.utils import timezone
+from datetime import timedelta
 
 
 ## python manage.py makemigrations
@@ -15,6 +18,7 @@ class Customer(models.Model):
     password = models.CharField(max_length=128, verbose_name="Mật khẩu")  # Sẽ lưu mật khẩu đã băm (hash)
     created_at = models.DateTimeField(auto_now_add=True)
     address = models.TextField(verbose_name="Địa chỉ", null=True, blank=True)
+    points = models.IntegerField(default=0, verbose_name="Điểm")
 
     class Meta:
         verbose_name = "Tài Khoản Khách Hàng"
@@ -183,6 +187,8 @@ class Order(models.Model):
     note = models.TextField(blank=True, null=True, verbose_name="Ghi chú")
     total_price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tổng tiền")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày có đơn hàng")
+    points_awarded = models.BooleanField(default=False, verbose_name="Đã cộng điểm")
+    awarded_points = models.IntegerField(default=0, verbose_name="Số điểm đã cộng")
 
     class Meta:
         verbose_name = "Đơn hàng"
@@ -190,6 +196,18 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Đơn hàng {self.id} - {self.full_name}"
+
+    def calculate_points(self):
+        try:
+            total = Decimal(self.total_price)
+        except Exception:
+            total = Decimal(0)
+        points = int(total * Decimal('0.01'))
+        return points
+
+    def is_completed(self):
+        now = timezone.now()
+        return (now - self.created_at) >= timedelta(seconds=5)  # days=5
 
 
 class OrderItem(models.Model):

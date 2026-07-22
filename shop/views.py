@@ -229,21 +229,30 @@ def tai_khoan(request):
 @require_http_methods(["GET", "POST"])
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def dang_ky(request):
-    """User registration with enhanced security and auto-login after successful registration"""
     if request.method == 'POST':
         from .forms import CustomerRegisterForm
         form = CustomerRegisterForm(request.POST)
 
         if form.is_valid():
             try:
-                customer = form.save(commit=False)
-                # Hash password using Django's built-in method
-                customer.set_password(form.cleaned_data['password'])
-                customer.save()
+                phone = form.cleaned_data['phone']
+                # Kiểm tra xem SĐT này đã có sẵn chưa (do từng mua hàng trước đó)
+                customer = Customer.objects.filter(phone=phone).first()
 
-                logger.info(f"New customer registered: {customer.phone}")
+                if customer:
+                    # Nếu đã có, cập nhật lại tên, địa chỉ và gán mật khẩu đăng ký
+                    customer.full_name = form.cleaned_data['full_name']
+                    customer.set_password(form.cleaned_data['password'])
+                    if form.cleaned_data.get('address'):
+                        customer.address = form.cleaned_data['address']
+                    customer.save()
+                else:
+                    # Nếu chưa có, tạo mới hoàn toàn
+                    customer = form.save(commit=False)
+                    customer.set_password(form.cleaned_data['password'])
+                    customer.save()
 
-                # ✅ IMPROVED - Automatically log in the customer after successful registration
+                logger.info(f"Customer registered/updated: {customer.phone}")
                 create_user_session(request, customer)
 
                 messages.success(request, f"Đăng ký thành công! Xin chào, {customer.full_name}!")
@@ -252,7 +261,6 @@ def dang_ky(request):
                 logger.error(f"Registration error: {e}")
                 messages.error(request, "Đã xảy ra lỗi. Vui lòng thử lại.")
         else:
-            # Log form errors
             logger.warning(f"Registration form errors: {form.errors}")
     else:
         from .forms import CustomerRegisterForm
@@ -392,14 +400,11 @@ def xac_nhan_don_hang(request):
         if not cart:
             return redirect('shop:gio_hang')
 
-        # 1. Khởi tạo form với dữ liệu từ POST
         form = OrderForm(request.POST)
 
-        # 2. Kiểm tra dữ liệu (Validation)
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Lưu order nhưng chưa commit vào DB ngay để xử lý total_price
                     order = form.save(commit=False)
                     order.total_price = 0
                     order.save()
@@ -421,10 +426,24 @@ def xac_nhan_don_hang(request):
                     order.total_price = total_amount
                     order.save()
 
+                    # 👇 THÊM ĐOẠN NÀY: Tự động tạo/tìm Customer vãng lai dựa trên SĐT đơn hàng
+                    customer, created = Customer.objects.get_or_create(
+                        phone=order.phone,
+                        defaults={
+                            'full_name': order.full_name,
+                            'address': order.address,
+                            'password': '',
+                        }
+                    )
+                    # Nếu khách vãng lai mua lại lần nữa mà đổi tên/địa chỉ, có thể cập nhật lại thông tin mới nhất
+                    if not created:
+                        customer.full_name = order.full_name
+                        customer.address = order.address
+                        customer.save(update_fields=['full_name', 'address'])
+
                     # Lấy danh sách item để gửi thông báo
                     order_items = OrderItem.objects.filter(order=order)
 
-                    # GỌI THREAD GỬI TELEGRAM
                     telegram_thread = threading.Thread(
                         target=send_telegram_notification,
                         args=(order, order_items),
@@ -439,11 +458,8 @@ def xac_nhan_don_hang(request):
                 messages.error(request, str(e))
                 return redirect('shop:gio_hang')
         else:
-            # ✅ IMPROVED - Use builder to avoid duplicate context building
             context = build_render_context(request, 'shop/thanh_toan.html')
             cart = request.session.get('cart', {})
-
-            # Dùng hàm tối ưu để lấy dữ liệu hiển thị lại trang thanh toán
             cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
             context.update({
