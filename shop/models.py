@@ -6,10 +6,18 @@ from django.core.cache import cache
 from decimal import Decimal
 from django.utils import timezone
 from datetime import timedelta
+import re
 
 
 ## python manage.py makemigrations
 ## python manage.py migrate
+
+def normalize_phone(phone: str) -> str:
+    if not phone:
+        return ""
+    # Remove all non-digit characters except leading +
+    cleaned = re.sub(r"[^\d+]", "", str(phone).strip())
+    return cleaned
 
 
 class Customer(models.Model):
@@ -181,6 +189,8 @@ class DocumentPost(models.Model):
 
 class Order(models.Model):
     # Thêm verbose_name vào các trường
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='orders',
+                                 verbose_name="Khách hàng")
     full_name = models.CharField(max_length=255, verbose_name="Họ và tên")
     phone = models.CharField(max_length=20, verbose_name="Số điện thoại")
     address = models.TextField(verbose_name="Địa chỉ")
@@ -208,6 +218,9 @@ class Order(models.Model):
     def is_completed(self):
         now = timezone.now()
         return (now - self.created_at) >= timedelta(seconds=5)  # days=5
+
+    def is_eligible_for_points(self):
+        return self.is_completed() and not self.points_awarded
 
 
 class OrderItem(models.Model):

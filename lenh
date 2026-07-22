@@ -8,6 +8,9 @@ python manage.py migrate
 
 python manage.py runserver
 
+python manage.py award_points
+
+
 git grep -n "days ==" || grep -R --line-number "days ==" .
 nl -ba shop/templates/admin/revenue_chart.html | sed -n '1,120p'
 git grep -l "days ==" | xargs -r sed -i.bak 's/days ==/days ==/g'
