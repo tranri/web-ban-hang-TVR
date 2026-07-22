@@ -93,12 +93,12 @@ class ProductAdmin(admin.ModelAdmin):
 
             # Truyền chuỗi đã định dạng sẵn vào format_html
             return format_html(
-                '<span style="color: {}; font-weight: bold;">{} -> ({})</span>',
+                '<span style="color: {}; font-weight: bold;">{} ({})</span>',
                 color, profit_str, percentage_str
             )
         return "-"
 
-    after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>sau thuế<br>(VNĐ)")
+    after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>gôp<br>sau thuế")
 
     def subtract_defective_button(self, obj):
         """Display subtract button for defective products"""
