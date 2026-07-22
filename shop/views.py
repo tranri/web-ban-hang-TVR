@@ -25,9 +25,7 @@ from django.middleware.csrf import get_token
 logger = logging.getLogger(__name__)
 
 
-# ✅ IMPROVED - Reusable context builders to reduce duplication
 def get_shop_config():
-    """Get or create shop configuration"""
     config = ShopConfiguration.objects.first()
     if not config:
         config = ShopConfiguration.objects.create()
@@ -35,10 +33,6 @@ def get_shop_config():
 
 
 def get_base_context(request=None, include_categories=True):
-    """
-    Build common context used in most templates
-    Returns: dict with config, categories, and customer_id
-    """
     context = {'config': get_shop_config()}
 
     if include_categories:
@@ -51,21 +45,14 @@ def get_base_context(request=None, include_categories=True):
 
 
 def get_all_categories_context():
-    """Get all categories (flat list, not hierarchical)"""
     return {'categories': Category.objects.all()}
 
 
 def get_hierarchical_categories_context():
-    """Get parent categories with prefetched children"""
     return {'categories': Category.objects.filter(parent__isnull=True).prefetch_related('children')}
 
 
-# ✅ IMPROVED - Helper to build common render context
 def build_render_context(request, template_name, **kwargs):
-    """
-    Helper to reduce boilerplate in view functions
-    Automatically adds config and categories
-    """
     context = get_base_context(request)
     context.update(kwargs)
     return context
@@ -76,10 +63,8 @@ CUSTOMER_SESSION_KEYS = ['customer_id', 'customer_name', 'customer_phone', 'cust
 
 
 def clear_customer_session(request):
-    """Remove only customer-specific keys from the session without touching Django auth keys."""
     for k in CUSTOMER_SESSION_KEYS:
         request.session.pop(k, None)
-    # Optionally clear the shopping cart associated with customer
     request.session.pop('cart', None)
     request.session.modified = True
 
@@ -211,9 +196,18 @@ def tai_khoan(request):
                 })
             orders_with_items.append({
                 'order': order,
-                'items': items_with_totals
+                'items': items_with_totals,
+                'awarded_points': order.awarded_points if order.points_awarded else 0,
+                'points_status': 'Đã cộng' if order.points_awarded else 'Chưa cộng'
             })
         context['orders_with_items'] = orders_with_items
+
+        # ✅ NEW - Add reward points information to context
+        context['customer_points'] = customer.points
+        context['total_earned_points'] = Order.objects.filter(
+            phone=customer.phone,
+            points_awarded=True
+        ).aggregate(total=Sum('awarded_points'))['total'] or 0
 
         return render(request, 'shop/tai_khoan.html', context)
 
@@ -440,6 +434,10 @@ def xac_nhan_don_hang(request):
                         customer.full_name = order.full_name
                         customer.address = order.address
                         customer.save(update_fields=['full_name', 'address'])
+
+                    # Link the order to the customer
+                    order.customer = customer
+                    order.save(update_fields=['customer'])
 
                     # Lấy danh sách item để gửi thông báo
                     order_items = OrderItem.objects.filter(order=order)

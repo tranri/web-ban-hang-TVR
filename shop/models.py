@@ -217,7 +217,7 @@ class Order(models.Model):
 
     def is_completed(self):
         now = timezone.now()
-        return (now - self.created_at) >= timedelta(seconds=5)  # days=5
+        return (now - self.created_at) >= timedelta(seconds=50)  # days=5
 
     def is_eligible_for_points(self):
         return self.is_completed() and not self.points_awarded

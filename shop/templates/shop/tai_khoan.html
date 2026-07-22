@@ -19,6 +19,19 @@
                         <p class="fw-bold mb-4">Xin Chào, <span
                                 class="text-danger fw-bold">{{ customer.full_name }}</span> !
                         </p>
+
+                        <!-- ✅ NEW - Reward Points Display -->
+                        <div class="alert alert-warning mb-4"
+                             style="background-color: #fff3cd; border: 2px solid #ffc107;">
+                            <div class="mb-2">
+                                <i class="fas fa-star text-warning me-2"></i>
+                                <strong>Điểm tích lũy</strong>
+                            </div>
+                            <p class="mb-0 fs-5" style="color: #ff6b00;">
+                                <strong>{{ customer_points }}</strong> điểm
+                            </p>
+                        </div>
+
                         <ul class="nav flex-column fw-bold">
                             <li class="nav-item mb-2">
                                 <a href="{% url 'shop:tai_khoan' %}?tab=info"
@@ -48,6 +61,7 @@
                         <h5 class="fw-bold mb-4">
                             <i class="fas fa-user-circle text-warning me-2"></i>THÔNG TIN TÀI KHOẢN
                         </h5>
+
                         <div class="d-flex flex-column gap-3">
                             <div class="p-3 bg-light rounded">
                                 <p class="m-0"><strong>Họ tên:</strong> {{ customer.full_name }}</p>
@@ -90,6 +104,8 @@
                                     <th>Ngày đặt</th>
                                     <th>Tổng tiền</th>
                                     <th>Số lượng sản phẩm</th>
+                                    <th>Điểm thưởng</th>
+                                    <th>Trạng thái</th>
                                     <th>Chi tiết</th>
                                 </tr>
                                 </thead>
@@ -100,6 +116,27 @@
                                     <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
                                     <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0 }}đ</td>
                                     <td>{{ item.items|length }} sản phẩm</td>
+                                    <!-- Điểm thưởng -->
+                                    <td>
+                                        {% if item.points_status == 'Đã cộng' %}
+                                        <span class="badge bg-success">{{ item.awarded_points }} ⭐</span>
+                                        {% else %}
+                                        <span class="badge text-dark"
+                                              style="background-color: #6c757d; color: #fff !important;">{{ item.order.calculate_points }} ⭐</span>
+                                        {% endif %}
+                                    </td>
+                                    <!-- Trạng thái điểm -->
+                                    <td>
+                                        {% if item.points_status == 'Đã cộng' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check-circle me-1"></i>{{ item.points_status }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-clock me-1"></i>{{ item.points_status }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-primary"
                                                 data-bs-toggle="collapse" data-bs-target="#order-{{ item.order.id }}">
@@ -108,7 +145,7 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td colspan="5">
+                                    <td colspan="7">
                                         <div class="collapse" id="order-{{ item.order.id }}">
                                             <div class="card card-body bg-light">
                                                 <h6 class="fw-bold mb-3">Chi tiết đơn hàng:</h6>
@@ -145,6 +182,26 @@
                                                     <strong>Ghi chú:</strong> {{ item.order.note }}
                                                 </div>
                                                 {% endif %}
+                                                <!-- Thông tin điểm thưởng trong chi tiết -->
+                                                <div class="mt-3 p-2 bg-white rounded border border-warning">
+                                                    <strong class="text-warning">⭐ Thông tin điểm thưởng:</strong>
+                                                    <p class="mb-0">
+                                                        Điểm nhận được: <strong>{% if item.points_status == 'Đã cộng'%}
+                                                        {{item.awarded_points}}
+                                                        {% else %}
+                                                        {{item.order.calculate_points}}
+                                                        {% endif %}</strong> điểm
+                                                        <span class="ms-3">
+                                                            Trạng thái:
+                                                            {% if item.points_status == 'Đã cộng' %}
+                                                                <span class="badge bg-success">✓ Đã cộng</span>
+                                                            {% else %}
+                                                                <span class="badge text-white"
+                                                                      style="background-color: #6c757d;">⏳ Chưa cộng</span>
+                                                            {% endif %}
+                                                        </span>
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -299,6 +356,12 @@
 
     .alert {
         border-radius: 0.5rem;
+    }
+
+    /* ✅ NEW - Points Badge Styling */
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
     }
 </style>
 

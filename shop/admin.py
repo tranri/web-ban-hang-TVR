@@ -224,9 +224,9 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status', 'points_awarded',
-                    'awarded_points', 'order_actions']
-    list_filter = ['created_at', 'full_name']
+    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status',
+                    'points_display', 'points_status_display', 'order_actions']
+    list_filter = ['created_at', 'full_name', 'points_awarded']
     search_fields = ['full_name', 'phone', 'id']
     readonly_fields = ['created_at', 'total_price', 'id']
     inlines = [OrderItemInline]
@@ -253,6 +253,44 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, status)
 
     order_status.short_description = "Trạng thái"
+
+    @admin.display(description="Điểm cộng")
+    def points_display(self, obj):
+        """Show points of the order with status indicator"""
+        points = obj.awarded_points if (obj.awarded_points and obj.awarded_points > 0) else obj.calculate_points()
+        if points > 0:
+            # Kiểm tra xem điểm đã được cộng thực tế hay chưa dựa trên trường points_awarded
+            if getattr(obj, 'points_awarded', False):
+                # Đã cộng rồi: ✓ màu xanh
+                return format_html(
+                    '<span style="color: #2b8a3e; font-weight: bold; background-color: #e8f5e9; padding: 4px 8px; border-radius: 3px;">✓ {} điểm</span>',
+                    points
+                )
+            else:
+                # Chưa cộng: x màu cam/vàng
+                return format_html(
+                    '<span style="color: #d97706; font-weight: bold; background-color: #fef3c7; padding: 4px 8px; border-radius: 3px;">x {} điểm</span>',
+                    points
+                )
+        return "-"
+
+    @admin.display(description="Trạng thái điểm")
+    def points_status_display(self, obj):
+        """Show current status of points"""
+        if obj.points_awarded:
+            return mark_safe(
+                '<span style="color: #fff; background-color: #51cf66; padding: 4px 8px; border-radius: 3px; font-weight: bold;">✓ Đã cộng</span>'
+            )
+        elif obj.is_eligible_for_points():
+            return mark_safe(
+                '<span style="color: #fff; background-color: #ff9800; padding: 4px 8px; border-radius: 3px; font-weight: bold;">⚠ Sẵn sàng</span>'
+            )
+        else:
+            pending_points = obj.calculate_points()
+            return format_html(
+                '<span style="color: #fff; background-color: #ffc107; padding: 4px 8px; border-radius: 3px; font-weight: bold;">⏳ Chờ {}</span>',
+                pending_points
+            )
 
     def order_actions(self, obj):
         """Display action buttons for the order"""
@@ -309,7 +347,6 @@ class OrderAdmin(admin.ModelAdmin):
 
                 # 3. Xóa đơn hàng
                 order.delete()
-
                 messages.success(request,
                                  f"Đã hoàn trả thành công đơn hàng #{object_id}. Đã khôi phục tồn kho và thu hồi điểm tích lũy tương ứng.")
         except Exception as e:
