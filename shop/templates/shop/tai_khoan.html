@@ -20,7 +20,7 @@
                                 class="text-danger fw-bold">{{ customer.full_name }}</span> !
                         </p>
 
-                        <!-- ✅ NEW - Reward Points Display -->
+                        <!-- Reward Points Display -->
                         <div class="alert alert-warning mb-4"
                              style="background-color: #fff3cd; border: 2px solid #ffc107;">
                             <div class="mb-2">
@@ -28,7 +28,7 @@
                                 <strong>Điểm tích lũy</strong>
                             </div>
                             <p class="mb-0 fs-5" style="color: #ff6b00;">
-                                <strong>{{ customer_points }}</strong> điểm
+                                <strong class="points-num">{{ customer_points }}</strong> điểm
                             </p>
                         </div>
 
@@ -114,15 +114,18 @@
                                 <tr>
                                     <td><strong>#{{ item.order.id }}</strong></td>
                                     <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
-                                    <td class="text-danger fw-bold">{{ item.order.total_price|floatformat:0 }}đ</td>
+                                    <!-- Tổng tiền đơn hàng có định dạng tiền tệ -->
+                                    <td class="text-danger fw-bold"><span class="money-num">{{ item.order.total_price|floatformat:0 }}</span>đ
+                                    </td>
                                     <td>{{ item.items|length }} sản phẩm</td>
                                     <!-- Điểm thưởng -->
                                     <td>
                                         {% if item.points_status == 'Đã cộng' %}
-                                        <span class="badge bg-success">{{ item.awarded_points }} ⭐</span>
+                                        <span class="badge bg-success"><span class="points-num">{{ item.awarded_points }}</span> ⭐</span>
                                         {% else %}
                                         <span class="badge text-dark"
-                                              style="background-color: #6c757d; color: #fff !important;">{{ item.order.calculate_points }} ⭐</span>
+                                              style="background-color: #6c757d; color: #fff !important;"><span
+                                                class="points-num">{{ item.order.calculate_points }}</span> ⭐</span>
                                         {% endif %}
                                     </td>
                                     <!-- Trạng thái điểm -->
@@ -164,10 +167,12 @@
                                                         <tr>
                                                             <td>{{ order_item.product.name }}</td>
                                                             <td class="text-center">{{ order_item.quantity }}</td>
-                                                            <td class="text-end">{{ order_item.price|floatformat:0 }}đ
+                                                            <!-- Giá sản phẩm -->
+                                                            <td class="text-end"><span class="money-num">{{ order_item.price|floatformat:0 }}</span>đ
                                                             </td>
+                                                            <!-- Thành tiền sản phẩm -->
                                                             <td class="text-end fw-bold text-danger">
-                                                                {{ order_item.total|floatformat:0 }}đ
+                                                                <span class="money-num">{{ order_item.total|floatformat:0 }}</span>đ
                                                             </td>
                                                         </tr>
                                                         {% endfor %}
@@ -187,9 +192,9 @@
                                                     <strong class="text-warning">⭐ Thông tin điểm thưởng:</strong>
                                                     <p class="mb-0">
                                                         Điểm nhận được: <strong>{% if item.points_status == 'Đã cộng'%}
-                                                        {{item.awarded_points}}
+                                                        <span class="points-num">{{item.awarded_points}}</span>
                                                         {% else %}
-                                                        {{item.order.calculate_points}}
+                                                        <span class="points-num">{{item.order.calculate_points}}</span>
                                                         {% endif %}</strong> điểm
                                                         <span class="ms-3">
                                                             Trạng thái:
@@ -358,12 +363,25 @@
         border-radius: 0.5rem;
     }
 
-    /* ✅ NEW - Points Badge Styling */
     .badge {
         font-size: 0.85rem;
         padding: 0.4rem 0.6rem;
     }
 </style>
+
+<!-- ✅ JavaScript Tự động định dạng số điểm và giá tiền -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Định dạng điểm thưởng và giá tiền có dấu chấm phân cách hàng nghìn
+        document.querySelectorAll('.points-num, .money-num').forEach(el => {
+            let text = el.textContent.trim();
+            let val = parseInt(text.replace(/\./g, ''));
+            if (!isNaN(val)) {
+                el.textContent = val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            }
+        });
+    });
+</script>
 
 <script>
     function togglePasswordVisibility(button) {
