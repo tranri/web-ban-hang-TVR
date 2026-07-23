@@ -108,6 +108,75 @@
             font-weight: 500;
             white-space: nowrap;
         }
+
+        /* Account dropdown with points styling */
+        .account-dropdown-wrapper {
+            position: relative;
+        }
+
+        .account-dropdown-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px !important;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .account-dropdown-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            text-decoration: none;
+            color: white;
+        }
+
+        .account-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .account-name {
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .account-points {
+            font-size: 11px;
+            color: #ffc107;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .account-points i {
+            font-size: 10px;
+            animation: twinkle 1.5s ease-in-out infinite;
+        }
+
+        .navbar .dropdown-menu .dropdown-divider {
+            margin: 0.5rem 0;
+        }
+
+        .navbar .dropdown-menu .points-info {
+            padding: 10px 1rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e5e5e5;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .navbar .dropdown-menu .points-info strong {
+            color: #ffc107;
+            font-weight: 700;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
     </style>
 </head>
 <!-- Thêm d-flex, flex-column, min-vh-100 để footer luôn ở đáy -->
@@ -270,14 +339,29 @@
                         </div>
                     </div>
                 </li>
-                <li class="nav-item ms-2">
+
+                <!-- Account & Points Unified Dropdown (OPTION 3) -->
+                <li class="nav-item ms-2 account-dropdown-wrapper">
                     {% if customer_name %}
                     <div class="dropdown">
-                        <button class="btn btn-outline-light btn-sm dropdown-toggle d-flex align-items-center" type="button"
-                                data-bs-toggle="dropdown" style="white-space: nowrap;">
-                            <i class="fa fa-user me-2"></i>{{ customer_name }}
+                        <button class="btn btn-outline-light btn-sm account-dropdown-btn dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa fa-user"></i>
+                            <div class="account-info">
+                                <span class="account-name">{{ customer_name }}</span>
+                                <span class="account-points">
+                                    <i class="bi bi-star-fill"></i>
+                                    {{ customer_points|default:"0" }}
+                                </span>
+                            </div>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <div class="points-info">
+                                    💎 Điểm thưởng: <strong>{{ customer_points|default:"0" }}</strong>
+                                </div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'shop:tai_khoan' %}"><i
                                     class="fa fa-info-circle me-2"></i>Tài khoản</a></li>
                             <li><a class="dropdown-item" href="{% url 'shop:dang_xuat' %}"><i
@@ -285,8 +369,15 @@
                         </ul>
                     </div>
                     {% else %}
-                    <a href="{% url 'shop:dang_nhap' %}" class="btn btn-outline-light btn-sm">
-                        <i class="fa fa-user"></i> Tài khoản
+                    <a href="{% url 'shop:dang_nhap' %}" class="btn btn-outline-light btn-sm account-dropdown-btn">
+                        <i class="fa fa-user"></i>
+                        <div class="account-info">
+                            <span class="account-name">Tài khoản</span>
+                            <span class="account-points">
+                                <i class="bi bi-star-fill"></i>
+                                0
+                            </span>
+                        </div>
                     </a>
                     {% endif %}
                 </li>

@@ -1,10 +1,24 @@
-from .models import Product, ShopConfiguration, Category
+from .models import Product, ShopConfiguration, Category, Customer
 from django.core.cache import cache
 
 
 def customer_info(request):
     customer_name = request.session.get('customer_name')
-    return {'customer_name': customer_name}
+    customer_id = request.session.get('customer_id')
+    customer_points = 0
+
+    # Get customer points if logged in
+    if customer_id:
+        try:
+            customer = Customer.objects.get(id=customer_id)
+            customer_points = customer.points
+        except Customer.DoesNotExist:
+            customer_points = 0
+
+    return {
+        'customer_name': customer_name,
+        'customer_points': customer_points
+    }
 
 
 def global_cart(request):
