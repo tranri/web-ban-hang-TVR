@@ -224,14 +224,41 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'full_name', 'phone', 'total_price_display', 'created_at', 'order_status',
-                    'points_display', 'points_status_display', 'order_actions']
+    list_display = [
+        'id',
+        'full_name',
+        'phone',
+        'total_price_display',  # original total before points
+        'applied_points_display',  # redeemed points
+        'final_price_display',  # total after redeemed points
+        'created_at_display',
+        'order_status',
+        'points_display',
+        'points_status_display',
+        'order_actions'
+    ]
     list_filter = ['created_at', 'full_name', 'points_awarded']
     search_fields = ['full_name', 'phone', 'id']
     readonly_fields = ['created_at', 'total_price', 'id']
     inlines = [OrderItemInline]
     list_per_page = 50
     date_hierarchy = 'created_at'
+
+    @admin.display(description="Ngày có đơn hàng")
+    def created_at_display(self, obj):
+        """
+        Show created_at as: HH:MM DD/MM/YYYY (e.g. 18:29 23/07/2026).
+        Uses timezone.localtime to respect TIME_ZONE and DST.
+        """
+        if not getattr(obj, 'created_at', None):
+            return "-"
+        # localize to current timezone and format
+        try:
+            local_dt = timezone.localtime(obj.created_at)
+            return local_dt.strftime("%H:%M %d/%m/%Y")
+        except Exception:
+            # fallback to default representation
+            return str(obj.created_at)
 
     @admin.display(description="Tổng tiền")
     def total_price_display(self, obj):
@@ -357,6 +384,25 @@ class OrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('product')))
+
+    @admin.display(description="Thanh toán (sau trừ điểm)")
+    def final_price_display(self, obj):
+        if getattr(obj, 'final_price', None) is not None:
+            try:
+                return f"{obj.final_price:,.0f}".replace(",", ".")
+            except Exception:
+                # fallback formatting
+                return str(obj.final_price)
+        return "-"
+
+    @admin.display(description="Điểm đã dùng")
+    def applied_points_display(self, obj):
+        if getattr(obj, 'applied_points', None):
+            try:
+                return f"{obj.applied_points:,}".replace(",", ".")
+            except Exception:
+                return str(obj.applied_points)
+        return "-"
 
 
 @admin.register(Customer)

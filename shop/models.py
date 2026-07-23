@@ -211,10 +211,12 @@ class Order(models.Model):
 
     def calculate_points(self):
         try:
-            total = Decimal(self.total_price)
+            amount = Decimal(self.final_price) if getattr(self, 'final_price',
+                                                          None) and self.final_price > 0 else Decimal(self.total_price)
         except Exception:
-            total = Decimal(0)
-        points = int(total * Decimal('0.01'))
+            amount = Decimal(0)
+
+        points = int(amount * Decimal('0.01'))  # 1% rounded down
         return points
 
     def is_completed(self):

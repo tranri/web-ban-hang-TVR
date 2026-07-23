@@ -441,9 +441,17 @@ def xac_nhan_don_hang(request):
                     if final_price < 0:
                         final_price = Decimal(0)
 
+                    # Save the computed totals and applied points on the order
                     order.total_price = total_amount
                     order.applied_points = applied_points
                     order.final_price = final_price
+
+                    # Calculate awarded points based on final_price (1% of final_price)
+                    # but do NOT automatically add to customer.points here; we store in order.awarded_points
+                    awarded_points = order.calculate_points()
+                    order.awarded_points = awarded_points
+                    # Keep points_awarded False — actual awarding can be performed later (admin/process)
+                    # Only save once here (inside the transaction)
                     order.save()
 
                     # Create or update a Customer
