@@ -3,14 +3,11 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.cache import cache
-from decimal import Decimal
 from django.utils import timezone
 from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 import re
 
-
-## python manage.py makemigrations
-## python manage.py migrate
 
 def normalize_phone(phone: str) -> str:
     if not phone:
@@ -234,6 +231,67 @@ class Order(models.Model):
             return Decimal(int(self.applied_points))
         except Exception:
             return Decimal(0)
+
+    def allocate_cash_and_points_refund(self, returned_item_totals):
+        try:
+            items = [Decimal(x) for x in returned_item_totals]
+            order_total = Decimal(self.total_price or 0)
+            applied_points_val = Decimal(self.applied_points or 0)  # Tổng điểm dùng (tính bằng VNĐ)
+
+            if order_total <= 0 or not items:
+                return {'per_item_cash': [0] * len(items), 'points_refund': 0,
+                        'total_returned_value': int(sum(items))}
+
+            final_cash = order_total - applied_points_val
+            rounded_cash = []
+            carry = Decimal(0)
+
+            for idx, it in enumerate(items):
+                if order_total > 0:
+                    exact_cash = (it / order_total) * final_cash
+                else:
+                    exact_cash = Decimal(0)
+
+                if idx == 0:
+                    cash = exact_cash.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+                    carry = cash % Decimal('1000')
+                    rounded_cash.append(cash)
+                elif idx < len(items) - 1:
+                    val = exact_cash + carry
+                    # Làm tròn đến hàng nghìn gần nhất
+                    cash = (val / Decimal('1000')).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * Decimal('1000')
+                    carry = val - cash
+                    if cash > it:
+                        cash = it
+                    if cash < 0:
+                        cash = Decimal(0)
+                    rounded_cash.append(cash)
+                else:
+                    sum_prev = sum(rounded_cash)
+                    cash = final_cash - sum_prev
+                    if cash > it:
+                        cash = it
+                    if cash < 0:
+                        cash = Decimal(0)
+                    rounded_cash.append(cash)
+
+            rounded_points = []
+            for idx, it in enumerate(items):
+                points = it - rounded_cash[idx]
+                rounded_points.append(int(points.quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
+
+            int_rounded_cash = [int(c.quantize(Decimal('1'), rounding=ROUND_HALF_UP)) for c in rounded_cash]
+            total_returned_val = sum(items)
+            total_points_refund = sum(rounded_points)
+
+            return {
+                'per_item_cash': int_rounded_cash,
+                'points_refund': int(total_points_refund),
+                'total_returned_value': int(total_returned_val.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+            }
+        except Exception:
+            return {'per_item_cash': [0] * len(returned_item_totals), 'points_refund': 0,
+                    'total_returned_value': int(sum(returned_item_totals) or 0)}
 
 
 class OrderItem(models.Model):

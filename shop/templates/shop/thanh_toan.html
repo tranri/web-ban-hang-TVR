@@ -77,56 +77,13 @@
                             <textarea name="note" class="form-control" rows="2"
                                       placeholder="Bạn cần chúng tôi chú ý điều gì ..."></textarea>
                         </div>
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="bg-white p-4 rounded shadow-sm border h-100">
-                        <h5 class="fw-bold mb-3 border-bottom pb-2">
-                            Đơn hàng ({{ tong_so_luong }} sản phẩm)
-                        </h5>
-                        <div class="order-summary-list mb-3" style="max-height: 400px; overflow-y: auto;">
-                            {% for item in cart_items %}
-                            <div class="d-flex align-items-center mb-3 p-2 border rounded">
-                                <div class="position-relative me-3" style="width: 60px; height: 60px; flex-shrink: 0;">
-                                    {% if item.product.image %}
-                                    <img src="{{ item.product.image.url }}" class="w-100 h-100 rounded border"
-                                         style="object-fit: cover;">
-                                    {% else %}
-                                    <div class="w-100 h-100 bg-light rounded border d-flex align-items-center justify-content-center">
-                                        <i class="bi bi-image text-muted"></i>
-                                    </div>
-                                    {% endif %}
-
-                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                                          style="font-size: 0.75rem; border: 2px solid white;">{{item.quantity}}
-                                    </span>
-                                </div>
-
-                                <div class="text-dark fw-bold small flex-grow-1">
-                                    {{ item.product.name }}
-                                </div>
-
-                                <div class="text-danger fw-bold small ms-2"
-                                     style="white-space: nowrap; flex-shrink: 0;">
-                                    {{ item.total_price|intcomma }} đ
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <hr>
-                        <div class="d-flex justify-content-between fw-bold fs-5 text-dark mb-4">
-                            <span>TỔNG CỘNG</span>
-                            <span class="text-danger">{{ tong_tien|intcomma }} đ</span>
-                        </div>
 
                         {% if current_customer %}
                         <div class="mb-3 p-3 bg-light rounded border">
                             <h6 class="fw-bold mb-2">Điểm thưởng</h6>
                             <p class="small text-muted mb-1">Bạn hiện có: <span id="current-points" class="fw-bold">{{ current_customer.points|default:0 }}</span>
                                 điểm</p>
-                            <label for="id_applied_points" class="form-label small">Sử dụng điểm để
+                            <label class="form-label small">Sử dụng điểm để
                                 giảm giá (Tối thiểu 10.000 điểm, 1.000 điểm = 1.000 đ)</label>
                             {{ form.applied_points }}
                             <div class="form-text small text-muted" id="points-help">Số điểm phải là bội số của 1.000 và
@@ -138,6 +95,64 @@
                             </div>
                         </div>
                         {% endif %}
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="bg-white p-4 rounded shadow-sm border h-100">
+                        <h5 class="fw-bold mb-3 border-bottom pb-2">
+                            Đơn hàng ({{ tong_so_luong }} sản phẩm)
+                        </h5>
+                        <div class="order-summary-list mb-3" style="max-height: 400px; overflow-y: auto;">
+                            {% for item in cart_items %}
+                            <div class="d-flex align-items-center mb-3 p-2 border rounded cart-item"
+                                 data-item-total="{{ item.total_price|floatformat:0 }}"
+                                 data-item-qty="{{ item.quantity }}">
+                                <div class="position-relative me-3" style="width: 60px; height: 60px; flex-shrink: 0;">
+                                    {% if item.product.image %}
+                                    <img src="{{ item.product.image.url }}" class="w-100 h-100 rounded border"
+                                         style="object-fit: cover;">
+                                    {% else %}
+                                    <div class="w-100 h-100 bg-light rounded border d-flex align-items-center justify-content-center">
+                                        <i class="bi bi-image text-muted"></i>
+                                    </div>
+                                    {% endif %}
+
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                          style="font-size: 0.75rem; border: 2px solid white;">{{ item.quantity }}</span>
+                                </div>
+
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="text-dark fw-bold small">{{ item.product.name }}</div>
+                                        <div class="text-danger fw-bold small ms-2"
+                                             style="white-space: nowrap; flex-shrink: 0;">
+                                            {{ item.total_price|intcomma }} đ
+                                        </div>
+                                    </div>
+
+                                    <!-- Per-item payment breakdown (will be updated by JS) -->
+                                    <div class="small text-muted mt-2">
+                                        Bạn trả (tiền): <span class="item-paid-cash fw-bold text-dark">-</span>
+                                        &nbsp;|&nbsp; Điểm áp dụng: <span
+                                            class="item-paid-points fw-bold text-danger">-</span>
+                                    </div>
+
+                                    <!-- Per-unit display -->
+                                    <div class="small text-muted">
+                                        / đơn vị: <span class="item-paid-cash-unit">-</span> đ
+                                        &nbsp;|&nbsp; <span class="item-paid-points-unit">-</span> điểm
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between fw-bold fs-5 text-dark mb-4">
+                            <span>TỔNG CỘNG</span>
+                            <span class="text-danger">{{ tong_tien|intcomma }} đ</span>
+                        </div>
 
                         <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-sm">
                             <i class="bi bi-check-circle"></i> ĐẶT HÀNG NGAY
@@ -155,53 +170,144 @@
 </div>
 <script>
     (function(){
-        var input = document.querySelector('input[name="applied_points"]');
-        if (!input) return;
+        // helper: format VND with dot-thousands
+        function formatVnd(n){
+            if (n === null || n === undefined) return '0 đ';
+            var s = Math.round(n).toString();
+            return s.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + ' đ';
+        }
+        // helper: format points (integer)
+        function formatPoints(n){
+            if (n === null || n === undefined) return '0';
+            return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
 
-        var currentPoints = parseInt("{{ current_customer.points|default:0 }}") || 0;
-        var orderTotal = parseInt("{{ order_total_value|default:0 }}") || 0;
-
+        var appliedInput = document.querySelector('input[name="applied_points"]');
         var conversionEl = document.getElementById('points-conversion');
         var helpEl = document.getElementById('points-help');
 
-        function formatVnd(n){
-            return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + ' đ';
+        // collect cart items DOM nodes & base totals
+        var cartItemNodes = Array.from(document.querySelectorAll('.cart-item'));
+
+        function readCartItems() {
+            return cartItemNodes.map(function(node){
+                var total = parseInt(node.getAttribute('data-item-total')) || 0;
+                var qty = parseInt(node.getAttribute('data-item-qty')) || 1;
+                return { node: node, total: total, qty: qty };
+            });
+        }
+
+        function updateAllocations(appliedPointsValue){
+            var items = readCartItems();
+            var orderTotal = items.reduce(function(s, it){ return s + it.total; }, 0);
+            if (orderTotal <= 0) {
+                items.forEach(function(it){
+                    it.node.querySelector('.item-paid-cash').textContent = formatVnd(0);
+                    it.node.querySelector('.item-paid-points').textContent = formatPoints(0) + ' điểm';
+                    it.node.querySelector('.item-paid-cash-unit').textContent = formatVnd(0).replace(' đ','');
+                    it.node.querySelector('.item-paid-points-unit').textContent = formatPoints(0);
+                });
+                return;
+            }
+
+            var discount = Math.max(0, Math.min(appliedPointsValue || 0, orderTotal));
+            var finalCash = orderTotal - discount;
+
+            var cashShares = [];
+            var carry = 0;
+
+            items.forEach(function(it, idx){
+                var exactCash = (it.total / orderTotal) * finalCash;
+
+                if (idx < items.length - 1) {
+                    // Các sản phẩm từ đầu đến gần cuối: cộng carry, làm tròn ĐẾN HÀNG NGÌN, phần dư chuyển xuống tiếp theo
+                    var val = exactCash + carry;
+                    var cash = Math.round(val / 1000) * 1000;
+                    carry = val - cash; // Phần dư (thập phân / lẻ) cộng dồn xuống sản phẩm tiếp theo
+
+                    // Giới hạn tiền trả không được vượt quá giá trị của sản phẩm hoặc âm
+                    cash = Math.max(0, Math.min(cash, it.total));
+                    cashShares.push(cash);
+                } else {
+                    // Sản phẩm cuối cùng: nhận toàn bộ phần tiền còn lại để khớp chính xác 100% với finalCash của đơn hàng
+                    var sumPrev = 0;
+                    for (var k = 0; k < idx; k++) {
+                        sumPrev += cashShares[k];
+                    }
+                    var cash = finalCash - sumPrev;
+                    cash = Math.max(0, Math.min(cash, it.total));
+                    cashShares.push(cash);
+                }
+            });
+
+            // Quy đổi điểm tương ứng cho từng sản phẩm: pointsShare = item.total - cashShare
+            var roundedPoints = items.map(function(it, idx){
+                return it.total - cashShares[idx];
+            });
+
+            // Cập nhật giao diện DOM
+            items.forEach(function(it, idx){
+                var cashShare = cashShares[idx] || 0;
+                var pointsShare = roundedPoints[idx] || 0;
+
+                var paidCashEl = it.node.querySelector('.item-paid-cash');
+                var paidPointsEl = it.node.querySelector('.item-paid-points');
+                var unitCashEl = it.node.querySelector('.item-paid-cash-unit');
+                var unitPointsEl = it.node.querySelector('.item-paid-points-unit');
+
+                if (paidCashEl) paidCashEl.textContent = formatVnd(cashShare);
+                if (paidPointsEl) paidPointsEl.textContent = formatPoints(pointsShare) + ' điểm';
+                if (unitCashEl) unitCashEl.textContent = formatVnd(Math.round(cashShare / Math.max(1, it.qty))).replace(' đ','');
+                if (unitPointsEl) unitPointsEl.textContent = formatPoints(Math.round(pointsShare / Math.max(1, it.qty)));
+            });
+
+            if (conversionEl) conversionEl.textContent = formatVnd(discount);
         }
 
         function validateAndDisplay(){
-            var v = parseInt(input.value) || 0;
+            var v = 0;
+            if (appliedInput) {
+                v = parseInt(appliedInput.value) || 0;
+            }
 
             if (v === 0) {
-                conversionEl.textContent = '0 đ';
+                if (helpEl) helpEl.textContent = '';
+                updateAllocations(0);
                 return;
             }
 
+            var items = readCartItems();
+            var orderTotal = items.reduce(function(s, it){ return s + it.total; }, 0);
+
             if (v < 10000) {
-                helpEl.textContent = 'Số điểm tối thiểu phải là 10.000.';
-                conversionEl.textContent = '0 đ';
+                if (helpEl) helpEl.textContent = 'Số điểm tối thiểu phải là 10.000.';
+                updateAllocations(0);
                 return;
             }
             if (v % 1000 !== 0) {
-                helpEl.textContent = 'Số điểm phải là bội của 1.000.';
-                conversionEl.textContent = '0 đ';
+                if (helpEl) helpEl.textContent = 'Số điểm phải là bội của 1.000.';
+                updateAllocations(0);
                 return;
             }
-            if (v > currentPoints) {
-                helpEl.textContent = 'Bạn không có đủ điểm.';
-                conversionEl.textContent = '0 đ';
+            if (v > (parseInt("{{ current_customer.points|default:0 }}") || 0)) {
+                if (helpEl) helpEl.textContent = 'Bạn không có đủ điểm.';
+                updateAllocations(0);
                 return;
             }
             if (v > orderTotal) {
-                helpEl.textContent = 'Số điểm không được lớn hơn tổng tiền đơn hàng.';
-                conversionEl.textContent = '0 đ';
+                if (helpEl) helpEl.textContent = 'Số điểm không được lớn hơn tổng tiền đơn hàng.';
+                updateAllocations(0);
                 return;
             }
-            helpEl.textContent = 'Số điểm hợp lệ.';
-            conversionEl.textContent = formatVnd(v);
+            if (helpEl) helpEl.textContent = 'Số điểm hợp lệ.';
+            updateAllocations(v);
         }
 
-        input.addEventListener('input', function(){ validateAndDisplay(); });
-        // init
+        if (appliedInput) {
+            appliedInput.addEventListener('input', validateAndDisplay);
+        }
+
+        // init on page load
         validateAndDisplay();
     })();
 </script>
