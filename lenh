@@ -6,9 +6,9 @@ git push
 python manage.py makemigrations
 python manage.py migrate
 
-python manage.py runserver
-
 python manage.py award_points
+
+python manage.py runserver
 
 
 git grep -n "days ==" || grep -R --line-number "days ==" .

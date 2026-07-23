@@ -13,6 +13,7 @@ class OrderForm(forms.ModelForm):
         label="Sử dụng điểm",
         widget=forms.NumberInput(attrs={
             'class': 'form-control',
+            'id': 'id_applied_points',  # Chủ động gán ID cố định
             'placeholder': 'Nhập số điểm muốn dùng (Ví dụ: 10000)',
             'step': 1000,
             'min': 0
@@ -72,7 +73,7 @@ class OrderForm(forms.ModelForm):
         cleaned = super().clean()
         # Additional cross-field checks can go here
         return cleaned
-    
+
     def clean_phone(self):
         phone = self.cleaned_data.get('phone')
         if not phone.isdigit() or len(phone) < 10 or len(phone) > 11:

@@ -435,10 +435,8 @@ def xac_nhan_don_hang(request):
 
                     # Applied points handling
                     applied_points = form.cleaned_data.get('applied_points') or 0
-                    # 1 point = 1 VND
                     discount_value = Decimal(int(applied_points))
 
-                    # final price cannot be negative
                     final_price = total_amount - discount_value
                     if final_price < 0:
                         final_price = Decimal(0)
@@ -448,7 +446,7 @@ def xac_nhan_don_hang(request):
                     order.final_price = final_price
                     order.save()
 
-                    # Create or update a Customer (guest -> vãng lai)
+                    # Create or update a Customer
                     customer, created = Customer.objects.get_or_create(
                         phone=order.phone,
                         defaults={
@@ -462,20 +460,17 @@ def xac_nhan_don_hang(request):
                         customer.address = order.address
                         customer.save(update_fields=['full_name', 'address'])
 
-                    # Link the order to the customer
                     order.customer = customer
                     order.save(update_fields=['customer'])
 
-                    # Deduct used points from customer (only if used and customer has enough)
+                    # Deduct used points
                     if applied_points and applied_points > 0:
                         if customer.points >= applied_points:
                             customer.points = customer.points - applied_points
                             customer.save(update_fields=['points'])
                         else:
-                            # This should not happen (form validation), but guard anyway
                             raise ValueError("Không đủ điểm để trừ cho đơn hàng.")
 
-                    # Lấy danh sách item để gửi thông báo
                     order_items = OrderItem.objects.filter(order=order)
 
                     telegram_thread = threading.Thread(
@@ -488,7 +483,6 @@ def xac_nhan_don_hang(request):
                 # remove cart after success
                 del request.session['cart']
 
-                # pass order details to confirmation page
                 return render(request, 'shop/xac_nhan_thanh_cong.html', {
                     'order': order,
                     'order_items': order_items,
@@ -497,7 +491,17 @@ def xac_nhan_don_hang(request):
 
             except Exception as e:
                 messages.error(request, str(e))
-                return redirect('shop:gio_hang')
+                # Render lại trang thanh toán thay vì redirect về giỏ hàng để giữ dữ liệu form
+                context = build_render_context(request, 'shop/thanh_toan.html')
+                context.update({
+                    'cart_items': cart_items,
+                    'tong_tien': tong_tien,
+                    'tong_so_luong': tong_so_luong,
+                    'form': form,
+                    'current_customer': session_customer,
+                    'order_total_value': order_total_value
+                })
+                return render(request, 'shop/thanh_toan.html', context)
         else:
             context = build_render_context(request, 'shop/thanh_toan.html')
             context.update({
@@ -505,7 +509,8 @@ def xac_nhan_don_hang(request):
                 'tong_tien': tong_tien,
                 'tong_so_luong': tong_so_luong,
                 'form': form,
-                'current_customer': session_customer
+                'current_customer': session_customer,
+                'order_total_value': order_total_value  # ✅ Đã bổ sung biến này để JS chạy đúng
             })
 
             messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
