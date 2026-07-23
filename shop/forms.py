@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -6,9 +7,22 @@ import re
 
 
 class OrderForm(forms.ModelForm):
+    applied_points = forms.IntegerField(
+        required=False,
+        min_value=0,
+        label="Sử dụng điểm",
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Nhập số điểm muốn dùng (Ví dụ: 10000)',
+            'step': 1000,
+            'min': 0
+        }),
+        help_text="Tối thiểu 10.000 điểm. 1.000 điểm = 1.000 đ. (Chỉ áp dụng cho khách đã đăng nhập)"
+    )
+
     class Meta:
         model = Order
-        fields = ['full_name', 'phone', 'address', 'note']  # removed 'email'
+        fields = ['full_name', 'phone', 'address', 'note', 'applied_points']
         widgets = {
             'full_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nhập họ tên...'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nhập số điện thoại...'}),
@@ -17,6 +31,48 @@ class OrderForm(forms.ModelForm):
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ghi chú thêm...'}),
         }
 
+    def __init__(self, *args, customer: Customer = None, order_total: Decimal = None, **kwargs):
+        """
+        Accept 'customer' (Customer instance or None) and 'order_total' (Decimal) for contextual validation.
+        """
+        super().__init__(*args, **kwargs)
+        self.customer = customer
+        self.order_total = Decimal(order_total) if order_total is not None else None
+
+        # If no logged-in customer, hide/disable applied_points input server-side by setting it not required
+        if not self.customer:
+            self.fields['applied_points'].required = False
+
+    def clean_applied_points(self):
+        applied = self.cleaned_data.get('applied_points') or 0
+        if applied:
+            # Minimum: 10,000 points
+            if applied < 10000:
+                raise ValidationError("Số điểm tối thiểu phải là 10.000 điểm.")
+
+            # Must be multiple of 1,000
+            if applied % 1000 != 0:
+                raise ValidationError("Số điểm phải là bội số của 1.000.")
+
+            # Customer must be logged in to use points
+            if not self.customer:
+                raise ValidationError("Chỉ khách đăng nhập mới có thể sử dụng điểm thưởng.")
+
+            # Customer must have enough points
+            if applied > (self.customer.points or 0):
+                raise ValidationError("Bạn không có đủ điểm để sử dụng số điểm này.")
+
+            # If order_total provided, ensure points do not exceed order total (1 point = 1 VND)
+            if self.order_total is not None:
+                if applied > int(self.order_total):
+                    raise ValidationError("Không thể sử dụng nhiều điểm hơn tổng tiền đơn hàng.")
+        return applied
+
+    def clean(self):
+        cleaned = super().clean()
+        # Additional cross-field checks can go here
+        return cleaned
+    
     def clean_phone(self):
         phone = self.cleaned_data.get('phone')
         if not phone.isdigit() or len(phone) < 10 or len(phone) > 11:

@@ -121,6 +121,24 @@
                             <span class="text-danger">{{ tong_tien|intcomma }} đ</span>
                         </div>
 
+                        {% if current_customer %}
+                        <div class="mb-3 p-3 bg-light rounded border">
+                            <h6 class="fw-bold mb-2">Điểm thưởng</h6>
+                            <p class="small text-muted mb-1">Bạn hiện có: <span id="current-points" class="fw-bold">{{ current_customer.points|default:0 }}</span>
+                                điểm</p>
+                            <label for="id_applied_points" class="form-label small">Sử dụng điểm để giảm giá (Tối thiểu
+                                10.000 điểm, 1.000 điểm = 1.000 đ)</label>
+                            {{ form.applied_points }}
+                            <div class="form-text small text-muted" id="points-help">Số điểm phải là bội số của 1.000 và
+                                không vượt quá tổng tiền đơn hàng.
+                            </div>
+                            <div class="mt-2">
+                                <span class="small">Giảm dự kiến: </span><span id="points-conversion"
+                                                                               class="fw-bold text-danger">0 đ</span>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-sm">
                             <i class="bi bi-check-circle"></i> ĐẶT HÀNG NGAY
                         </button>
@@ -135,4 +153,56 @@
         </div>
     </div>
 </div>
+<script>
+    (function(){
+        var input = document.querySelector('input[name="applied_points"]');
+        if (!input) return;
+
+        var currentPoints = parseInt("{{ current_customer.points|default:0 }}") || 0;
+        var orderTotal = parseInt("{{ order_total_value|default:0 }}") || 0;
+
+        var conversionEl = document.getElementById('points-conversion');
+        var helpEl = document.getElementById('points-help');
+
+        function formatVnd(n){
+            return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + ' đ';
+        }
+
+        function validateAndDisplay(){
+            var v = parseInt(input.value) || 0;
+
+            if (v === 0) {
+                conversionEl.textContent = '0 đ';
+                return;
+            }
+
+            if (v < 10000) {
+                helpEl.textContent = 'Số điểm tối thiểu phải là 10.000.';
+                conversionEl.textContent = '0 đ';
+                return;
+            }
+            if (v % 1000 !== 0) {
+                helpEl.textContent = 'Số điểm phải là bội của 1.000.';
+                conversionEl.textContent = '0 đ';
+                return;
+            }
+            if (v > currentPoints) {
+                helpEl.textContent = 'Bạn không có đủ điểm.';
+                conversionEl.textContent = '0 đ';
+                return;
+            }
+            if (v > orderTotal) {
+                helpEl.textContent = 'Số điểm không được lớn hơn tổng tiền đơn hàng.';
+                conversionEl.textContent = '0 đ';
+                return;
+            }
+            helpEl.textContent = 'Số điểm hợp lệ.';
+            conversionEl.textContent = formatVnd(v);
+        }
+
+        input.addEventListener('input', function(){ validateAndDisplay(); });
+        // init
+        validateAndDisplay();
+    })();
+</script>
 {% endblock %}

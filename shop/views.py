@@ -21,6 +21,7 @@ from django.views.decorators.cache import never_cache
 from django.contrib.messages import get_messages
 from django.contrib import messages as django_messages
 from django.middleware.csrf import get_token
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -324,33 +325,40 @@ def dang_xuat(request):
 
 
 def thanh_toan(request):
-    # ✅ IMPROVED - Use builder instead of manual context building
+    # Use builder
     context = build_render_context(request, 'shop/thanh_toan.html')
 
     # Lấy thông tin giỏ hàng
     cart = request.session.get('cart', {})
     cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
+    # numeric order total (int) for JS and form validation
+    order_total_value = int(tong_tien) if tong_tien else 0
+
     customer_id = request.session.get('customer_id')
     customer = Customer.objects.filter(id=customer_id).first() if customer_id else None
 
     if request.method == 'POST':
-        form = OrderForm(request.POST)
+        form = OrderForm(request.POST, customer=customer, order_total=order_total_value)
         if form.is_valid():
+            # we will handle final save in xac_nhan_don_hang; here just a lightweight flow (optional)
             order = form.save(commit=False)
+            # Keep order.total_price / final_price to be set in xac_nhan_don_hang for atomic processing
             order.save()
             request.session['cart'] = {}
             return redirect('shop:thanh_cong')
     else:
         initial_data = {'full_name': customer.full_name, 'phone': customer.phone,
                         'address': customer.address} if customer else {}
-        form = OrderForm(initial=initial_data)
+        form = OrderForm(initial=initial_data, customer=customer, order_total=order_total_value)
 
     context.update({
         'cart_items': cart_items,
         'tong_tien': tong_tien,
         'tong_so_luong': tong_so_luong,
         'form': form,
+        'current_customer': customer,  # template expects current_customer
+        'order_total_value': order_total_value  # for JS
     })
 
     return render(request, 'shop/thanh_toan.html', context)
@@ -394,7 +402,15 @@ def xac_nhan_don_hang(request):
         if not cart:
             return redirect('shop:gio_hang')
 
-        form = OrderForm(request.POST)
+        # provide totals for form validation
+        cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
+        order_total_value = int(tong_tien) if tong_tien else 0
+
+        # Identify logged-in customer (if any) for validation and later deduction
+        customer_id = request.session.get('customer_id')
+        session_customer = Customer.objects.filter(id=customer_id).first() if customer_id else None
+
+        form = OrderForm(request.POST, customer=session_customer, order_total=order_total_value)
 
         if form.is_valid():
             try:
@@ -403,7 +419,7 @@ def xac_nhan_don_hang(request):
                     order.total_price = 0
                     order.save()
 
-                    total_amount = 0
+                    total_amount = Decimal(0)
                     for p_id, item in cart.items():
                         product = Product.objects.select_for_update().get(id=int(p_id))
                         if product.stock < item['quantity']:
@@ -417,10 +433,22 @@ def xac_nhan_don_hang(request):
                         OrderItem.objects.create(order=order, product=product, quantity=item['quantity'],
                                                  price=product.price)
 
+                    # Applied points handling
+                    applied_points = form.cleaned_data.get('applied_points') or 0
+                    # 1 point = 1 VND
+                    discount_value = Decimal(int(applied_points))
+
+                    # final price cannot be negative
+                    final_price = total_amount - discount_value
+                    if final_price < 0:
+                        final_price = Decimal(0)
+
                     order.total_price = total_amount
+                    order.applied_points = applied_points
+                    order.final_price = final_price
                     order.save()
 
-                    # 👇 THÊM ĐOẠN NÀY: Tự động tạo/tìm Customer vãng lai dựa trên SĐT đơn hàng
+                    # Create or update a Customer (guest -> vãng lai)
                     customer, created = Customer.objects.get_or_create(
                         phone=order.phone,
                         defaults={
@@ -429,7 +457,6 @@ def xac_nhan_don_hang(request):
                             'password': '',
                         }
                     )
-                    # Nếu khách vãng lai mua lại lần nữa mà đổi tên/địa chỉ, có thể cập nhật lại thông tin mới nhất
                     if not created:
                         customer.full_name = order.full_name
                         customer.address = order.address
@@ -438,6 +465,15 @@ def xac_nhan_don_hang(request):
                     # Link the order to the customer
                     order.customer = customer
                     order.save(update_fields=['customer'])
+
+                    # Deduct used points from customer (only if used and customer has enough)
+                    if applied_points and applied_points > 0:
+                        if customer.points >= applied_points:
+                            customer.points = customer.points - applied_points
+                            customer.save(update_fields=['points'])
+                        else:
+                            # This should not happen (form validation), but guard anyway
+                            raise ValueError("Không đủ điểm để trừ cho đơn hàng.")
 
                     # Lấy danh sách item để gửi thông báo
                     order_items = OrderItem.objects.filter(order=order)
@@ -449,22 +485,27 @@ def xac_nhan_don_hang(request):
                     )
                     telegram_thread.start()
 
+                # remove cart after success
                 del request.session['cart']
-                return render(request, 'shop/xac_nhan_thanh_cong.html', {'order_id': order.id})
+
+                # pass order details to confirmation page
+                return render(request, 'shop/xac_nhan_thanh_cong.html', {
+                    'order': order,
+                    'order_items': order_items,
+                    'remaining_points': customer.points if customer else 0
+                })
 
             except Exception as e:
                 messages.error(request, str(e))
                 return redirect('shop:gio_hang')
         else:
             context = build_render_context(request, 'shop/thanh_toan.html')
-            cart = request.session.get('cart', {})
-            cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
-
             context.update({
                 'cart_items': cart_items,
                 'tong_tien': tong_tien,
                 'tong_so_luong': tong_so_luong,
-                'form': form
+                'form': form,
+                'current_customer': session_customer
             })
 
             messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")

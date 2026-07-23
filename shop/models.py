@@ -199,6 +199,8 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày có đơn hàng")
     points_awarded = models.BooleanField(default=False, verbose_name="Đã cộng điểm")
     awarded_points = models.IntegerField(default=0, verbose_name="Số điểm đã cộng")
+    applied_points = models.IntegerField(default=0, verbose_name="Điểm sử dụng")
+    final_price = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Tổng sau khi trừ điểm")
 
     class Meta:
         verbose_name = "Đơn hàng"
@@ -221,6 +223,15 @@ class Order(models.Model):
 
     def is_eligible_for_points(self):
         return self.is_completed() and not self.points_awarded
+
+    def apply_points_value(self):
+        """
+        Return VND value of applied points. Conversion: 1000 points = 1000 VND => 1 point = 1 VND.
+        """
+        try:
+            return Decimal(int(self.applied_points))
+        except Exception:
+            return Decimal(0)
 
 
 class OrderItem(models.Model):
