@@ -113,20 +113,14 @@ def tai_khoan(request):
     try:
         customer = Customer.objects.get(id=customer_id)
 
-        # ✅ VERIFY SESSION INTEGRITY
         stored_phone = request.session.get('customer_phone')
         if stored_phone != customer.phone:
-            # Session data mismatch - potential tampering
             logger.warning(f"Session integrity check failed for customer {customer_id}")
-            # Clear only customer session keys instead of flushing the entire session
             clear_customer_session(request)
             messages.error(request, "Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.")
             return redirect('shop:dang_nhap')
 
-        # Get the active tab from GET parameter (default: 'info')
         active_tab = request.GET.get('tab', 'info')
-
-        # Initialize context
         context = build_render_context(request, 'shop/tai_khoan.html', customer=customer)
         context['active_tab'] = active_tab
 
@@ -185,7 +179,7 @@ def tai_khoan(request):
         # Get order items for each order and pre-calculate totals
         orders_with_items = []
         now = timezone.now()
-        limit = timedelta(days=5)  # seconds=50
+        limit = timedelta(seconds=50)  # days=5
 
         for order in customer_orders:
             order_items = OrderItem.objects.filter(order=order)
@@ -223,12 +217,21 @@ def tai_khoan(request):
             })
         context['orders_with_items'] = orders_with_items
 
-        # ✅ NEW - Add reward points information to context
+        # ✅ TÍNH TOÁN ĐIỂM TÍCH LŨY CHO 3 MỤC
         context['customer_points'] = customer.points
-        context['total_earned_points'] = Order.objects.filter(
-            phone=customer.phone,
-            points_awarded=True
-        ).aggregate(total=Sum('awarded_points'))['total'] or 0
+
+        # 1. Tổng điểm sắp nhận được (từ các đơn hàng chưa cộng điểm / points_awarded=False)
+        pending_orders = Order.objects.filter(phone=customer.phone, points_awarded=False)
+        pending_points = sum(o.calculate_points() for o in pending_orders)
+        context['pending_points'] = pending_points
+
+        # 2. Tổng điểm đã sử dụng (đã áp dụng vào các đơn hàng trước đó)
+        total_used_points = Order.objects.filter(phone=customer.phone).aggregate(total=Sum('applied_points'))[
+                                'total'] or 0
+
+        # 3. Tổng điểm tích lũy = Điểm hiện có + Điểm đã dùng + Điểm sắp nhận
+        total_points = customer.points + total_used_points
+        context['total_points'] = total_points
 
         return render(request, 'shop/tai_khoan.html', context)
 

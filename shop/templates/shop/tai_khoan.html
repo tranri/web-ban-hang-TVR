@@ -27,9 +27,20 @@
                                 <i class="fas fa-star text-warning me-2"></i>
                                 <strong>Điểm tích lũy</strong>
                             </div>
-                            <p class="mb-0 fs-5" style="color: #ff6b00;">
-                                <strong class="points-num">{{ customer_points }}</strong> điểm
-                            </p>
+                            <ul class="list-unstyled mb-0 mt-2" style="font-size: 0.95rem; color: #333;">
+                                <li class="mb-1">
+                                    🏆 Tổng điểm tích lũy<br>
+                                    <strong class="points-num" style="color: #ff6b00; font-size: 1.1rem;">{{ total_points }}</strong> điểm
+                                </li>
+                                <li class="mb-1 mt-2">
+                                    🎁 Điểm hiện có<br>
+                                    <strong class="points-num" style="color: #ff6b00; font-size: 1.1rem;">{{ customer_points }}</strong> điểm
+                                </li>
+                                <li class="mb-0 mt-2">
+                                    ⭐ Điểm chờ cộng<br>
+                                    <strong class="points-num" style="color: #ff6b00; font-size: 1.1rem;">{{ pending_points }}</strong> điểm
+                                </li>
+                            </ul>
                         </div>
 
                         <ul class="nav flex-column fw-bold">
