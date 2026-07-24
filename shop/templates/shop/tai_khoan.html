@@ -89,7 +89,6 @@
                             </form>
                         </div>
 
-                        <!-- Tab 2: Customer Orders -->
                         {% elif active_tab == 'orders' %}
                         <h5 class="fw-bold mb-4">
                             <i class="fas fa-shopping-bag text-warning me-2"></i>ĐƠN HÀNG CỦA BẠN
@@ -97,12 +96,13 @@
 
                         {% if customer_orders %}
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="table table-hover align-middle">
                                 <thead class="table-light">
                                 <tr>
                                     <th>#</th>
                                     <th>Ngày đặt</th>
-                                    <th>Tổng tiền</th>
+
+                                    <th>Thanh toán</th>
                                     <th>Số lượng sản phẩm</th>
                                     <th>Điểm thưởng</th>
                                     <th>Trạng thái</th>
@@ -114,11 +114,22 @@
                                 <tr>
                                     <td><strong>#{{ item.order.id }}</strong></td>
                                     <td>{{ item.order.created_at|date:"d/m/Y H:i" }}</td>
-                                    <!-- Tổng tiền đơn hàng có định dạng tiền tệ -->
-                                    <td class="text-danger fw-bold"><span class="money-num">{{ item.order.total_price|floatformat:0 }}</span>đ
+
+
+                                    <!-- Thanh toán (Tổng sau khi trừ điểm) -->
+                                    <td class="text-danger fw-bold">
+                                        <span class="money-num">
+                                            {% if item.order.final_price and item.order.final_price > 0 %}
+                                                {{ item.order.final_price|floatformat:0 }}
+                                            {% else %}
+                                                {{ item.order.total_price|floatformat:0 }}
+                                            {% endif %}
+                                        </span>đ
                                     </td>
+
                                     <td>{{ item.items|length }} sản phẩm</td>
-                                    <!-- Điểm thưởng -->
+
+                                    <!-- Điểm thưởng nhận được -->
                                     <td>
                                         {% if item.points_status == 'Đã cộng' %}
                                         <span class="badge bg-success"><span class="points-num">{{ item.awarded_points }}</span> ⭐</span>
@@ -128,6 +139,7 @@
                                                 class="points-num">{{ item.order.calculate_points }}</span> ⭐</span>
                                         {% endif %}
                                     </td>
+
                                     <!-- Trạng thái điểm -->
                                     <td>
                                         {% if item.points_status == 'Đã cộng' %}
@@ -140,6 +152,7 @@
                                         </span>
                                         {% endif %}
                                     </td>
+
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-primary"
                                                 data-bs-toggle="collapse" data-bs-target="#order-{{ item.order.id }}">
@@ -148,29 +161,33 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td colspan="7">
+                                    <!-- Đổi colspan từ 7 thành 8 để khớp với tổng số cột mới -->
+                                    <td colspan="8" class="p-0">
                                         <div class="collapse" id="order-{{ item.order.id }}">
-                                            <div class="card card-body bg-light">
+                                            <div class="card card-body bg-light m-2">
                                                 <h6 class="fw-bold mb-3">Chi tiết đơn hàng:</h6>
                                                 <div class="table-responsive">
                                                     <table class="table table-sm">
                                                         <thead>
                                                         <tr>
                                                             <th>Sản phẩm</th>
-                                                            <th>Số lượng</th>
-                                                            <th>Giá</th>
-                                                            <th>Thành tiền</th>
+                                                            <th class="text-center">Số lượng</th>
+                                                            <th class="text-end">Giá</th>
+                                                            <th class="text-end">Thành tiền</th>
                                                         </tr>
                                                         </thead>
                                                         <tbody>
                                                         {% for order_item in item.items %}
                                                         <tr>
                                                             <td>{{ order_item.product.name }}</td>
-                                                            <td class="text-center">{{ order_item.quantity }}</td>
-                                                            <!-- Giá sản phẩm -->
-                                                            <td class="text-end"><span class="money-num">{{ order_item.price|floatformat:0 }}</span>đ
+                                                            <td class="text-center">x{{ order_item.quantity }}</td>
+
+                                                            <td class="text-end">
+                                                                {% if order_item.discount_per_unit and order_item.discount_per_unit > 0 %}
+                                                                <del class="text-muted"><span class="money-num">{{ order_item.price|floatformat:0 }}</span>đ</del>
+                                                                <span class="mx-1 text-muted">→</span><span class="text-danger"><span class="money-num">{{order_item.final_unit_price|floatformat:0}}</span>đ</span>{% else %}<span class="money-num">{{ order_item.price|floatformat:0 }}</span>đ{%endif%}
                                                             </td>
-                                                            <!-- Thành tiền sản phẩm -->
+
                                                             <td class="text-end fw-bold text-danger">
                                                                 <span class="money-num">{{ order_item.total|floatformat:0 }}</span>đ
                                                             </td>
@@ -187,24 +204,18 @@
                                                     <strong>Ghi chú:</strong> {{ item.order.note }}
                                                 </div>
                                                 {% endif %}
-                                                <!-- Thông tin điểm thưởng trong chi tiết -->
                                                 <div class="mt-3 p-2 bg-white rounded border border-warning">
                                                     <strong class="text-warning">⭐ Thông tin điểm thưởng:</strong>
                                                     <p class="mb-0">
-                                                        Điểm nhận được: <strong>{% if item.points_status == 'Đã cộng'%}
-                                                        <span class="points-num">{{item.awarded_points}}</span>
-                                                        {% else %}
-                                                        <span class="points-num">{{item.order.calculate_points}}</span>
-                                                        {% endif %}</strong> điểm
+                                                        Đã dùng: <strong><span class="points-num">{{ item.points_used }}</span></strong> điểm |
+                                                        {% if item.points_status == 'Đã cộng' %}
+                                                        Nhận được: <strong><span class="points-num">{{ item.awarded_points }}</span></strong> điểm
                                                         <span class="ms-3">
-                                                            Trạng thái:
-                                                            {% if item.points_status == 'Đã cộng' %}
-                                                                <span class="badge bg-success">✓ Đã cộng</span>
-                                                            {% else %}
-                                                                <span class="badge text-white"
-                                                                      style="background-color: #6c757d;">⏳ Chưa cộng</span>
-                                                            {% endif %}
+                                                            Trạng thái: <span class="badge bg-success">✓ Đã cộng</span>
                                                         </span>
+                                                        {% else %}
+                                                        Sau <strong>{{ item.remaining_days }}</strong> ngày bạn sẽ nhận được <strong><span class="points-num">{{ item.order.calculate_points }}</span></strong> điểm
+                                                        {% endif %}
                                                     </p>
                                                 </div>
                                             </div>

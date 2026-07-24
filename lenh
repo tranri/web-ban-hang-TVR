@@ -23,6 +23,9 @@ git grep -n "days ==" || grep -R --line-number "days ==" .
     def is_completed(self):
         now = timezone.now()
         return (now - self.created_at) >= timedelta(seconds=5)  # days=5
+
+và views.py
+    limit = timedelta(days=5)  # seconds=50
 ############################################
 *******  khi nào bán hàng thực tế hãy hỏi genimi: "làm cách nào để tự động cập nhập điểm"
 ----------------------------------------------

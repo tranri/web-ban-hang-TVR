@@ -2,21 +2,21 @@
 {% load humanize %}
 
 {% block navbar %}
-<div class="bg-white border-bottom shadow-sm py-3">
+<div class="bg-white border-bottom shadow-sm py-2">
     <div class="container text-center">
         <a href="/" class="d-inline-flex align-items-center text-decoration-none">
             {% if config.logo %}
-            <img src="{{ config.logo.url }}" alt="Logo" style="height: 50px; width: auto; margin-right: 15px;">
+            <img src="{{ config.logo.url }}" alt="Logo" style="height: 40px; width: auto; margin-right: 10px;">
             {% endif %}
-            <span class="fw-bold fs-2" style="color: #dc3545;">{{ config.title }}</span>
+            <span class="fw-bold fs-3" style="color: #dc3545;">{{ config.title }}</span>
         </a>
     </div>
 </div>
 {% endblock %}
 
 {% block footer %}
-<footer class="text-center py-4 mt-5 bg-white border-top">
-    <div class="container text-muted">
+<footer class="text-center py-3 mt-4 bg-white border-top">
+    <div class="container text-muted small">
         <p class="mb-1 fw-bold text-dark">Cảm ơn bạn đã cho {{ config.title }} cơ hội được góp một phần nhỏ vào hành
             trình chinh phục đam mê công nghệ của bạn. </p>
         <p class="mb-1 fw-bold text-dark"> Chúc bạn có những trải nghiệm tuyệt vời nhất!</p>
@@ -29,86 +29,133 @@
 {% endblock %}
 
 {% block content %}
+<style>
+    /* Ẩn mũi tên tăng giảm trên ô input number của điểm thưởng */
+    input[name="applied_points"]::-webkit-outer-spin-button,
+    input[name="applied_points"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    input[name="applied_points"] {
+        -moz-appearance: textfield;
+    }
+</style>
+
 {% if messages %}
 {% for message in messages %}
-<div class="alert alert-danger text-center">{{ message }}</div>
+<div class="alert alert-danger text-center py-2">{{ message }}</div>
 {% endfor %}
 {% endif %}
-<div class="container my-5">
+<div class="container my-4">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <h3 class="fw-bold text-dark mb-4 text-center">
+        <div class="col-12">
+            <h4 class="fw-bold text-dark mb-3 text-center">
                 <i class="bi bi-credit-card-2-front text-success"></i> THANH TOÁN ĐƠN HÀNG
-            </h3>
+            </h4>
 
-            <form method="POST" action="{% url 'shop:xac_nhan_don_hang' %}" class="row g-5">
+            <form method="POST" action="{% url 'shop:xac_nhan_don_hang' %}" class="row g-3">
                 {% csrf_token %}
 
-                <div class="col-md-6">
-                    <div class="bg-white p-4 rounded shadow-sm border h-100">
-                        <h5 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-success"></i> Thông tin nhận
-                            hàng</h5>
+                <!-- Mục 1: Thông tin nhận hàng -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="bg-white p-3 rounded shadow-sm border h-100">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-success"></i> Thông tin nhận
+                            hàng</h6>
 
                         <!-- Họ Tên -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Họ Và Tên (Bắt Buộc)</label>
-                            <input type="text" name="full_name" class="form-control" required
+                        <div class="mb-2">
+                            <label class="fw-bold form-label small text-muted mb-1">Họ Và Tên (Bắt Buộc)</label>
+                            <input type="text" name="full_name" class="form-control form-control-sm" required
                                    placeholder="Nhập họ tên..."
                                    value="{% if current_customer %}{{ current_customer.full_name }}{% else %}{{ form.full_name.value|default:'' }}{% endif %}">
                         </div>
 
                         <!-- Số Điện Thoại -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Số Điện Thoại (Bắt Buộc)</label>
-                            <input type="tel" name="phone" class="form-control" required
+                        <div class="mb-2">
+                            <label class="fw-bold form-label small text-muted mb-1">Số Điện Thoại (Bắt Buộc)</label>
+                            <input type="tel" name="phone" class="form-control form-control-sm" required
                                    placeholder="Nhập số điện thoại..."
                                    value="{% if current_customer %}{{ current_customer.phone }}{% else %}{{ form.phone.value|default:'' }}{% endif %}">
                         </div>
 
                         <!-- Địa Chỉ -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Địa Chỉ Chi Tiết (Bắt Buộc)</label>
-                            <textarea name="address" class="form-control" rows="3" required
+                        <div class="mb-2">
+                            <label class="fw-bold form-label small text-muted mb-1">Địa Chỉ Chi Tiết (Bắt Buộc)</label>
+                            <textarea name="address" class="form-control form-control-sm" rows="2" required
                                       placeholder="Số nhà, đường, phường/xã...">{% if current_customer %}{{ current_customer.address }}{% else %}{{ form.address.value|default:'' }}{% endif %}</textarea>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Ghi Chú (Không bắt buộc)</label>
-                            <textarea name="note" class="form-control" rows="2"
-                                      placeholder="Bạn cần chúng tôi chú ý điều gì ..."></textarea>
+                        <div class="mb-0">
+                            <label class="fw-bold form-label small text-muted mb-1">Ghi Chú (Không bắt buộc)</label>
+                            <textarea name="note" class="form-control form-control-sm" rows="2"
+                                      placeholder="Ghi chú đơn hàng..."></textarea>
                         </div>
-
-                        {% if current_customer %}
-                        <div class="mb-3 p-3 bg-light rounded border">
-                            <h6 class="fw-bold mb-2">Điểm thưởng</h6>
-                            <p class="small text-muted mb-1">Bạn hiện có: <span id="current-points" class="fw-bold">{{ current_customer.points|default:0 }}</span>
-                                điểm</p>
-                            <label class="form-label small">Sử dụng điểm để
-                                giảm giá (Tối thiểu 10.000 điểm, 1.000 điểm = 1.000 đ)</label>
-                            {{ form.applied_points }}
-                            <div class="form-text small text-muted" id="points-help">Số điểm phải là bội số của 1.000 và
-                                không vượt quá tổng tiền đơn hàng.
-                            </div>
-                            <div class="mt-2">
-                                <span class="small">Giảm dự kiến: </span><span id="points-conversion"
-                                                                               class="fw-bold text-danger">0 đ</span>
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
 
-                <div class="col-md-6">
-                    <div class="bg-white p-4 rounded shadow-sm border h-100">
-                        <h5 class="fw-bold mb-3 border-bottom pb-2">
+                <!-- Mục 2: Điểm thưởng -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="bg-white p-3 rounded shadow-sm border h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+                                <h6 class="fw-bold mb-0 text-dark">
+                                    <i class="bi bi-award-fill text-warning me-1"></i> Điểm Thưởng
+                                </h6>
+                                {% if current_customer %}
+                                <span class="badge bg-warning text-dark px-2 py-1 fw-bold" style="font-size: 0.85rem;">
+                                    <span id="current-points">{{ current_customer.points|default:0 }}</span> điểm
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            {% if current_customer %}
+                            <div class="mb-2">
+                                <label class="form-label small text-muted mb-1 fw-semibold">Nhập số điểm muốn
+                                    dùng:</label>
+                                <div class="input-group input-group-sm">
+                                    {{ form.applied_points }}
+                                    <span class="input-group-text bg-light text-muted">điểm</span>
+                                </div>
+                                <div class="form-text text-muted mt-1" style="font-size: 0.75rem;">
+                                    Tối thiểu 10.000 điểm (1.000 điểm = 1.000đ)
+                                </div>
+                            </div>
+
+                            <!-- Khung thông tin tổng hợp trạng thái & giảm dự kiến -->
+                            <div class="p-2 bg-light rounded border mt-3">
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span class="text-muted" id="points-help">Chưa sử dụng điểm</span>
+                                    <div>
+                                        <span class="text-muted">Giảm: </span>
+                                        <span id="points-conversion" class="fw-bold text-danger">0 đ</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Mục điểm thưởng nhận được sau đơn hàng (1% tổng thanh toán) -->
+                            <div class="mt-2 text-center small text-muted fw-semibold py-1 bg-white">
+                                <span>⭐ Hoàn tất đơn hàng để nhận <span id="earned-points"
+                                                                        class="text-success fw-bold">+0</span> điểm</span>
+                            </div>
+                            {% else %}
+                            <p class="small text-muted mb-0">Vui lòng đăng nhập để sử dụng tính năng điểm thưởng.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mục 3: Đơn hàng -->
+                <div class="col-lg-4 col-md-12">
+                    <div class="bg-white p-3 rounded shadow-sm border h-100">
+                        <h6 class="fw-bold mb-2 border-bottom pb-2">
                             Đơn hàng ({{ tong_so_luong }} sản phẩm)
-                        </h5>
-                        <div class="order-summary-list mb-3" style="max-height: 400px; overflow-y: auto;">
+                        </h6>
+                        <div class="order-summary-list mb-2">
                             {% for item in cart_items %}
-                            <div class="d-flex align-items-center mb-3 p-2 border rounded cart-item"
+                            <div class="d-flex align-items-center mb-2 p-2 border rounded cart-item"
                                  data-item-total="{{ item.total_price|floatformat:0 }}"
                                  data-item-qty="{{ item.quantity }}">
-                                <div class="position-relative me-3" style="width: 60px; height: 60px; flex-shrink: 0;">
+                                <div class="position-relative me-2" style="width: 45px; height: 45px; flex-shrink: 0;">
                                     {% if item.product.image %}
                                     <img src="{{ item.product.image.url }}" class="w-100 h-100 rounded border"
                                          style="object-fit: cover;">
@@ -119,40 +166,49 @@
                                     {% endif %}
 
                                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                                          style="font-size: 0.75rem; border: 2px solid white;">{{ item.quantity }}</span>
+                                          style="font-size: 0.65rem; border: 1px solid white;">{{ item.quantity }}</span>
                                 </div>
 
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-start">
-                                        <div class="text-dark fw-bold small">{{ item.product.name }}</div>
-                                        <div class="text-danger fw-bold small ms-2"
+                                        <div class="text-dark fw-bold small text-truncate" style="max-width: 130px;"
+                                             title="{{ item.product.name }}">{{ item.product.name }}
+                                        </div>
+                                        <div class="text-danger fw-bold small ms-1 item-paid-cash"
                                              style="white-space: nowrap; flex-shrink: 0;">
                                             {{ item.total_price|intcomma }} đ
                                         </div>
                                     </div>
 
-                                    <!-- Per-item payment breakdown (will be updated by JS) -->
-                                    <div class="small text-muted mt-2">
-                                        Bạn trả (tiền): <span class="item-paid-cash fw-bold text-dark">-</span>
-                                        &nbsp;|&nbsp; Điểm áp dụng: <span
-                                            class="item-paid-points fw-bold text-danger">-</span>
+                                    <div class="text-muted" style="font-size: 0.75rem;">
+                                        Giá Gốc: <span
+                                            class="fw-bold text-danger">{{ item.total_price|intcomma }} đ</span>
+                                        | Giảm: <span class="item-paid-points fw-bold text-dark">0 đ</span>
                                     </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
 
-                        <hr>
-                        <div class="d-flex justify-content-between fw-bold fs-5 text-dark mb-4">
-                            <span>TỔNG CỘNG</span>
-                            <span class="text-danger">{{ tong_tien|intcomma }} đ</span>
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between small fw-bold text-dark mb-1">
+                            <span>TỔNG TIỀN HÀNG</span>
+                            <span>{{ tong_tien|intcomma }} đ</span>
+                        </div>
+                        <div class="d-flex justify-content-between small fw-bold text-dark mb-1">
+                            <span>TỔNG TIỀN GIẢM</span>
+                            <span class="text-dark" id="summary-total-discount">0 đ</span>
+                        </div>
+                        <div class="d-flex justify-content-between fw-bold text-dark mb-3 border-top pt-1">
+                            <span>TỔNG THANH TOÁN</span>
+                            <span class="text-danger fs-6" id="summary-final-total">{{ tong_tien|intcomma }} đ</span>
                         </div>
 
-                        <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-sm">
-                            <i class="bi bi-check-circle"></i> ĐẶT HÀNG NGAY
+                        <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-sm">
+                            <i class="bi bi-check-circle"></i> XÁC NHẬN ĐẶT HÀNG
                         </button>
-                        <div class="text-center mt-3">
-                            <a href="{% url 'shop:gio_hang' %}" class="text-decoration-none text-muted">
+                        <div class="text-center mt-2">
+                            <a href="{% url 'shop:gio_hang' %}" class="text-decoration-none text-muted small">
                                 <i class="bi bi-chevron-left"></i> Quay về giỏ hàng
                             </a>
                         </div>
@@ -164,23 +220,35 @@
 </div>
 <script>
     (function(){
-        // helper: format VND with dot-thousands
-        function formatVnd(n){
+        var ROUND_GRANULARITY = 1000;
+
+        function formatVndInt(n){
             if (n === null || n === undefined) return '0 đ';
-            var s = Math.round(n).toString();
+            var val = Math.round(Number(n));
+            var s = val.toString();
             return s.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + ' đ';
         }
-        // helper: format points (integer)
         function formatPoints(n){
             if (n === null || n === undefined) return '0';
-            return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return Math.round(Number(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        function roundToGranularity(n){
+            if (!ROUND_GRANULARITY || ROUND_GRANULARITY <= 1) return Math.round(n);
+            return Math.round(n / ROUND_GRANULARITY) * ROUND_GRANULARITY;
         }
 
         var appliedInput = document.querySelector('input[name="applied_points"]');
+        if (appliedInput) {
+            appliedInput.classList.add('form-control', 'form-control-sm');
+        }
+
         var conversionEl = document.getElementById('points-conversion');
         var helpEl = document.getElementById('points-help');
+        var summaryDiscountEl = document.getElementById('summary-total-discount');
+        var summaryFinalTotalEl = document.getElementById('summary-final-total');
+        var earnedPointsEl = document.getElementById('earned-points');
 
-        // collect cart items DOM nodes & base totals
         var cartItemNodes = Array.from(document.querySelectorAll('.cart-item'));
 
         function readCartItems() {
@@ -196,55 +264,70 @@
             var orderTotal = items.reduce(function(s, it){ return s + it.total; }, 0);
             if (orderTotal <= 0) {
                 items.forEach(function(it){
-                    it.node.querySelector('.item-paid-cash').textContent = formatVnd(0);
-                    it.node.querySelector('.item-paid-points').textContent = formatPoints(0) + ' điểm';
+                    it.node.querySelector('.item-paid-cash').textContent = formatVndInt(0);
+                    it.node.querySelector('.item-paid-points').textContent = formatVndInt(0);
                 });
+                if (conversionEl) conversionEl.textContent = formatVndInt(0);
+                if (summaryDiscountEl) summaryDiscountEl.textContent = formatVndInt(0);
+                if (summaryFinalTotalEl) summaryFinalTotalEl.textContent = formatVndInt(0);
+                if (earnedPointsEl) earnedPointsEl.textContent = '+0';
                 return;
             }
 
             var discount = Math.max(0, Math.min(appliedPointsValue || 0, orderTotal));
             var finalCash = orderTotal - discount;
+            finalCash = Math.round(finalCash);
 
             var cashShares = [];
-            var carry = 0;
+            var allocatedSum = 0;
 
             items.forEach(function(it, idx){
-                var exactCash = (it.total / orderTotal) * finalCash;
-
+                var itemTotal = it.total;
                 if (idx < items.length - 1) {
-                    var val = exactCash + carry;
-                    var cash = Math.round(val / 1000) * 1000;
-                    carry = val - cash;
-
-                    cash = Math.max(0, Math.min(cash, it.total));
-                    cashShares.push(cash);
+                    var exactCash = (itemTotal / orderTotal) * finalCash;
+                    var roundedCash = roundToGranularity(exactCash);
+                    roundedCash = Math.max(0, Math.min(Math.round(roundedCash), itemTotal));
+                    cashShares.push(roundedCash);
+                    allocatedSum += roundedCash;
                 } else {
-                    var sumPrev = 0;
-                    for (var k = 0; k < idx; k++) {
-                        sumPrev += cashShares[k];
-                    }
-                    var cash = finalCash - sumPrev;
-                    cash = Math.max(0, Math.min(cash, it.total));
-                    cashShares.push(cash);
+                    var lastCash = finalCash - allocatedSum;
+                    lastCash = Math.max(0, Math.min(Math.round(lastCash), itemTotal));
+                    cashShares.push(lastCash);
+                    allocatedSum += lastCash;
                 }
             });
 
-            var roundedPoints = items.map(function(it, idx){
-                return it.total - cashShares[idx];
-            });
+            var diff = allocatedSum - finalCash;
+            if (diff !== 0) {
+                for (var i = items.length - 1; i >= 0 && diff !== 0; i--) {
+                    var canAdjust = cashShares[i] - 0;
+                    var adjust = Math.min(Math.abs(diff), canAdjust);
+                    if (adjust > 0) {
+                        cashShares[i] -= Math.sign(diff) * adjust;
+                        allocatedSum = cashShares.reduce(function(s,v){return s+v;},0);
+                        diff = allocatedSum - finalCash;
+                    }
+                }
+            }
 
             items.forEach(function(it, idx){
                 var cashShare = cashShares[idx] || 0;
-                var pointsShare = roundedPoints[idx] || 0;
+                var pointsShare = Math.max(0, Math.round(it.total - cashShare));
 
                 var paidCashEl = it.node.querySelector('.item-paid-cash');
                 var paidPointsEl = it.node.querySelector('.item-paid-points');
 
-                if (paidCashEl) paidCashEl.textContent = formatVnd(cashShare);
-                if (paidPointsEl) paidPointsEl.textContent = formatPoints(pointsShare) + ' điểm';
+                if (paidCashEl) paidCashEl.textContent = formatVndInt(cashShare);
+                if (paidPointsEl) paidPointsEl.textContent = formatVndInt(pointsShare);
             });
 
-            if (conversionEl) conversionEl.textContent = formatVnd(discount);
+            if (conversionEl) conversionEl.textContent = formatVndInt(discount);
+            if (summaryDiscountEl) summaryDiscountEl.textContent = discount > 0 ? '-' + formatVndInt(discount) : formatVndInt(0);
+            if (summaryFinalTotalEl) summaryFinalTotalEl.textContent = formatVndInt(finalCash);
+
+            // Tính điểm thưởng nhận được (1% của tổng thanh toán)
+            var earned = Math.round(finalCash * 0.01);
+            if (earnedPointsEl) earnedPointsEl.textContent = '+' + formatPoints(earned);
         }
 
         function validateAndDisplay(){
@@ -254,7 +337,7 @@
             }
 
             if (v === 0) {
-                if (helpEl) helpEl.textContent = '';
+                if (helpEl) helpEl.textContent = 'Chưa sử dụng điểm';
                 updateAllocations(0);
                 return;
             }
@@ -263,31 +346,39 @@
             var orderTotal = items.reduce(function(s, it){ return s + it.total; }, 0);
 
             if (v < 10000) {
-                if (helpEl) helpEl.textContent = 'Số điểm tối thiểu phải là 10.000.';
+                if (helpEl) helpEl.textContent = 'Tối thiểu 10.000 điểm';
                 updateAllocations(0);
                 return;
             }
             if (v % 1000 !== 0) {
-                if (helpEl) helpEl.textContent = 'Số điểm phải là bội của 1.000.';
+                if (helpEl) helpEl.textContent = 'Phải là bội của 1.000';
                 updateAllocations(0);
                 return;
             }
-            if (v > (parseInt("{{ current_customer.points|default:0 }}") || 0)) {
-                if (helpEl) helpEl.textContent = 'Bạn không có đủ điểm.';
+
+            var customerPoints = parseInt("{{ current_customer.points|default:0 }}") || 0;
+            if (v > customerPoints) {
+                if (helpEl) helpEl.textContent = 'Không đủ điểm';
                 updateAllocations(0);
                 return;
             }
             if (v > orderTotal) {
-                if (helpEl) helpEl.textContent = 'Số điểm không được lớn hơn tổng tiền đơn hàng.';
+                if (helpEl) helpEl.textContent = 'Vượt quá tổng tiền';
                 updateAllocations(0);
                 return;
             }
-            if (helpEl) helpEl.textContent = 'Số điểm hợp lệ.';
+            if (helpEl) helpEl.textContent = 'Bạn đang tiết kiệm';
             updateAllocations(v);
         }
 
         if (appliedInput) {
             appliedInput.addEventListener('input', validateAndDisplay);
+            appliedInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    validateAndDisplay();
+                }
+            });
         }
 
         validateAndDisplay();

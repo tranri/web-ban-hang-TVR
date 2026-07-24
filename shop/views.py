@@ -21,7 +21,7 @@ from django.views.decorators.cache import never_cache
 from django.contrib.messages import get_messages
 from django.contrib import messages as django_messages
 from django.middleware.csrf import get_token
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -184,22 +184,42 @@ def tai_khoan(request):
 
         # Get order items for each order and pre-calculate totals
         orders_with_items = []
+        now = timezone.now()
+        limit = timedelta(days=5)  # seconds=50
+
         for order in customer_orders:
             order_items = OrderItem.objects.filter(order=order)
-            # ✅ FIXED - Pre-calculate item totals in Python instead of template
             items_with_totals = []
             for item in order_items:
+                unit_price = item.price
+                disc_unit = getattr(item, 'discount_per_unit', Decimal(0))
+                final_unit_price = unit_price - disc_unit
+                line_total = final_unit_price * item.quantity
+
                 items_with_totals.append({
                     'product': item.product,
                     'quantity': item.quantity,
-                    'price': item.price,
-                    'total': item.price * item.quantity  # Calculate total here
+                    'price': unit_price,
+                    'discount_per_unit': disc_unit,
+                    'final_unit_price': final_unit_price,
+                    'total': line_total
                 })
+
+            # Lấy số điểm đã dùng (kiểm tra các tên trường phổ biến)
+            points_used = getattr(order, 'applied_points',
+                                  getattr(order, 'points_used', getattr(order, 'used_points', 0)))
+
+            # Tính số ngày còn lại giống logic ở Admin
+            time_diff = now - order.created_at
+            remaining_days = (limit - time_diff).days + 1 if time_diff < limit else 0
+
             orders_with_items.append({
                 'order': order,
                 'items': items_with_totals,
                 'awarded_points': order.awarded_points if order.points_awarded else 0,
-                'points_status': 'Đã cộng' if order.points_awarded else 'Chưa cộng'
+                'points_status': 'Đã cộng' if order.points_awarded else 'Chưa cộng',
+                'points_used': points_used or 0,
+                'remaining_days': remaining_days,
             })
         context['orders_with_items'] = orders_with_items
 
@@ -420,39 +440,66 @@ def xac_nhan_don_hang(request):
                     order.save()
 
                     total_amount = Decimal(0)
+                    cart_items_data = []
                     for p_id, item in cart.items():
                         product = Product.objects.select_for_update().get(id=int(p_id))
                         if product.stock < item['quantity']:
                             raise ValueError(f"Sản phẩm {product.name} không đủ số lượng.")
 
-                        product.stock -= item['quantity']
-                        product.save()
-
                         item_total = product.price * item['quantity']
                         total_amount += item_total
-                        OrderItem.objects.create(order=order, product=product, quantity=item['quantity'],
-                                                 price=product.price)
+                        cart_items_data.append({
+                            'product': product,
+                            'quantity': item['quantity'],
+                            'total': item_total,
+                            'price': product.price
+                        })
 
                     # Applied points handling
                     applied_points = form.cleaned_data.get('applied_points') or 0
                     discount_value = Decimal(int(applied_points))
 
+                    # Phân bổ giảm giá theo tỷ lệ tiền hàng của từng sản phẩm
+                    item_discounts = []
+                    allocated_discount = Decimal(0)
+                    for i, it in enumerate(cart_items_data):
+                        if i < len(cart_items_data) - 1 and total_amount > 0:
+                            exact_disc = (it['total'] / total_amount) * discount_value
+                            rounded_disc = (exact_disc / 1000).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * 1000
+                            rounded_disc = max(Decimal(0), min(rounded_disc, it['total']))
+                            item_discounts.append(rounded_disc)
+                            allocated_discount += rounded_disc
+                        else:
+                            last_disc = discount_value - allocated_discount
+                            last_disc = max(Decimal(0), min(last_disc, it['total']))
+                            item_discounts.append(last_disc)
+                            allocated_discount += last_disc
+
                     final_price = total_amount - discount_value
                     if final_price < 0:
                         final_price = Decimal(0)
 
-                    # Save the computed totals and applied points on the order
                     order.total_price = total_amount
                     order.applied_points = applied_points
                     order.final_price = final_price
-
-                    # Calculate awarded points based on final_price (1% of final_price)
-                    # but do NOT automatically add to customer.points here; we store in order.awarded_points
-                    awarded_points = order.calculate_points()
-                    order.awarded_points = awarded_points
-                    # Keep points_awarded False — actual awarding can be performed later (admin/process)
-                    # Only save once here (inside the transaction)
+                    order.awarded_points = order.calculate_points()
                     order.save()
+                    for i, it in enumerate(cart_items_data):
+                        product = it['product']
+                        qty = it['quantity']
+                        total_item_disc = item_discounts[i]
+                        disc_per_unit = total_item_disc / Decimal(qty) if qty > 0 else Decimal(0)
+
+                        product.stock -= qty
+                        product.save()
+
+                        OrderItem.objects.create(
+                            order=order,
+                            product=product,
+                            quantity=qty,
+                            price=product.price,
+                            discount_per_unit=disc_per_unit
+                        )
 
                     # Create or update a Customer
                     customer, created = Customer.objects.get_or_create(

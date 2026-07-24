@@ -218,7 +218,7 @@ class Order(models.Model):
 
     def is_completed(self):
         now = timezone.now()
-        return (now - self.created_at) >= timedelta(seconds=50)  # days=5
+        return (now - self.created_at) >= timedelta(days=5)  # seconds=50
 
     def is_eligible_for_points(self):
         return self.is_completed() and not self.points_awarded
@@ -232,62 +232,85 @@ class Order(models.Model):
         except Exception:
             return Decimal(0)
 
-    def allocate_cash_and_points_refund(self, returned_item_totals):
+    def allocate_cash_and_points_refund(self, returned_item_totals, rounding_granularity=1000):
         try:
             items = [Decimal(x) for x in returned_item_totals]
             order_total = Decimal(self.total_price or 0)
-            applied_points_val = Decimal(self.applied_points or 0)  # Tổng điểm dùng (tính bằng VNĐ)
+            applied_points_val = Decimal(self.applied_points or 0)  # points used in VND
 
             if order_total <= 0 or not items:
                 return {'per_item_cash': [0] * len(items), 'points_refund': 0,
-                        'total_returned_value': int(sum(items))}
+                        'total_returned_value': int(sum(items) or 0)}
 
-            final_cash = order_total - applied_points_val
-            rounded_cash = []
-            carry = Decimal(0)
+            # cash actually paid for entire order
+            final_cash_paid = order_total - applied_points_val
+            if final_cash_paid < 0:
+                final_cash_paid = Decimal(0)
 
-            for idx, it in enumerate(items):
+            # per-item exact cash allocation (before rounding)
+            raw_cash = []
+            for it in items:
                 if order_total > 0:
-                    exact_cash = (it / order_total) * final_cash
+                    raw = (it / order_total) * final_cash_paid
                 else:
-                    exact_cash = Decimal(0)
+                    raw = Decimal(0)
+                raw_cash.append(raw)
 
-                if idx == 0:
-                    cash = exact_cash.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-                    carry = cash % Decimal('1000')
-                    rounded_cash.append(cash)
-                elif idx < len(items) - 1:
-                    val = exact_cash + carry
-                    # Làm tròn đến hàng nghìn gần nhất
-                    cash = (val / Decimal('1000')).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * Decimal('1000')
-                    carry = val - cash
-                    if cash > it:
-                        cash = it
-                    if cash < 0:
-                        cash = Decimal(0)
-                    rounded_cash.append(cash)
+            # Round each share to nearest granularity, last item gets remainder so sums match
+            rounded_cash = []
+            allocated_sum = Decimal(0)
+            gran = Decimal(rounding_granularity)
+
+            for i, raw in enumerate(raw_cash):
+                if i < len(raw_cash) - 1:
+                    # round to nearest granularity
+                    if gran > 1:
+                        share = (raw / gran).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * gran
+                    else:
+                        share = raw.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+                    # clamp between 0 and item total
+                    share = max(Decimal(0), min(share, items[i]))
+                    rounded_cash.append(share)
+                    allocated_sum += share
                 else:
-                    sum_prev = sum(rounded_cash)
-                    cash = final_cash - sum_prev
-                    if cash > it:
-                        cash = it
-                    if cash < 0:
-                        cash = Decimal(0)
-                    rounded_cash.append(cash)
+                    # last item receives remainder
+                    last_share = final_cash_paid - allocated_sum
+                    last_share = max(Decimal(0), min(last_share, items[i]))
+                    rounded_cash.append(last_share)
+                    allocated_sum += last_share
 
-            rounded_points = []
-            for idx, it in enumerate(items):
-                points = it - rounded_cash[idx]
-                rounded_points.append(int(points.quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
+            # If due to rounding the allocated_sum differs slightly, adjust last item
+            diff = allocated_sum - final_cash_paid
+            if diff != 0:
+                # try to adjust the last item (or earlier if negative/positive)
+                for j in range(len(rounded_cash) - 1, -1, -1):
+                    can_adjust = rounded_cash[j] - Decimal(0)
+                    adjust = min(abs(diff), can_adjust)
+                    if adjust > 0:
+                        if diff > 0:
+                            # allocated too much -> subtract
+                            rounded_cash[j] -= adjust
+                        else:
+                            # allocated too little -> add (prefer adding to last)
+                            rounded_cash[j] += adjust
+                        diff = diff - (adjust if diff > 0 else -adjust)
+                        if diff == 0:
+                            break
+
+            # points refund is proportion of returned items relative to order_total * applied_points_val
+            points_refund = 0
+            if applied_points_val > 0:
+                returned_sum = sum(items)
+                raw_points_refund = (returned_sum / order_total) * applied_points_val
+                points_refund = int(raw_points_refund.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
             int_rounded_cash = [int(c.quantize(Decimal('1'), rounding=ROUND_HALF_UP)) for c in rounded_cash]
-            total_returned_val = sum(items)
-            total_points_refund = sum(rounded_points)
+            total_returned_val = int(sum(items).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
             return {
                 'per_item_cash': int_rounded_cash,
-                'points_refund': int(total_points_refund),
-                'total_returned_value': int(total_returned_val.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+                'points_refund': int(points_refund),
+                'total_returned_value': total_returned_val
             }
         except Exception:
             return {'per_item_cash': [0] * len(returned_item_totals), 'points_refund': 0,
@@ -300,6 +323,8 @@ class OrderItem(models.Model):
     product = models.ForeignKey('Product', on_delete=models.CASCADE, verbose_name="Sản phẩm")
     quantity = models.PositiveIntegerField(verbose_name="Số lượng")
     price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Giá")
+    discount_per_unit = models.DecimalField(max_digits=12, decimal_places=0, default=0,
+                                            verbose_name="Giảm giá mỗi đơn vị")
 
     class Meta:
         verbose_name = "Mục hàng"
