@@ -137,12 +137,6 @@
                                         &nbsp;|&nbsp; Điểm áp dụng: <span
                                             class="item-paid-points fw-bold text-danger">-</span>
                                     </div>
-
-                                    <!-- Per-unit display -->
-                                    <div class="small text-muted">
-                                        / đơn vị: <span class="item-paid-cash-unit">-</span> đ
-                                        &nbsp;|&nbsp; <span class="item-paid-points-unit">-</span> điểm
-                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -204,8 +198,6 @@
                 items.forEach(function(it){
                     it.node.querySelector('.item-paid-cash').textContent = formatVnd(0);
                     it.node.querySelector('.item-paid-points').textContent = formatPoints(0) + ' điểm';
-                    it.node.querySelector('.item-paid-cash-unit').textContent = formatVnd(0).replace(' đ','');
-                    it.node.querySelector('.item-paid-points-unit').textContent = formatPoints(0);
                 });
                 return;
             }
@@ -220,16 +212,13 @@
                 var exactCash = (it.total / orderTotal) * finalCash;
 
                 if (idx < items.length - 1) {
-                    // Các sản phẩm từ đầu đến gần cuối: cộng carry, làm tròn ĐẾN HÀNG NGÌN, phần dư chuyển xuống tiếp theo
                     var val = exactCash + carry;
                     var cash = Math.round(val / 1000) * 1000;
-                    carry = val - cash; // Phần dư (thập phân / lẻ) cộng dồn xuống sản phẩm tiếp theo
+                    carry = val - cash;
 
-                    // Giới hạn tiền trả không được vượt quá giá trị của sản phẩm hoặc âm
                     cash = Math.max(0, Math.min(cash, it.total));
                     cashShares.push(cash);
                 } else {
-                    // Sản phẩm cuối cùng: nhận toàn bộ phần tiền còn lại để khớp chính xác 100% với finalCash của đơn hàng
                     var sumPrev = 0;
                     for (var k = 0; k < idx; k++) {
                         sumPrev += cashShares[k];
@@ -240,25 +229,19 @@
                 }
             });
 
-            // Quy đổi điểm tương ứng cho từng sản phẩm: pointsShare = item.total - cashShare
             var roundedPoints = items.map(function(it, idx){
                 return it.total - cashShares[idx];
             });
 
-            // Cập nhật giao diện DOM
             items.forEach(function(it, idx){
                 var cashShare = cashShares[idx] || 0;
                 var pointsShare = roundedPoints[idx] || 0;
 
                 var paidCashEl = it.node.querySelector('.item-paid-cash');
                 var paidPointsEl = it.node.querySelector('.item-paid-points');
-                var unitCashEl = it.node.querySelector('.item-paid-cash-unit');
-                var unitPointsEl = it.node.querySelector('.item-paid-points-unit');
 
                 if (paidCashEl) paidCashEl.textContent = formatVnd(cashShare);
                 if (paidPointsEl) paidPointsEl.textContent = formatPoints(pointsShare) + ' điểm';
-                if (unitCashEl) unitCashEl.textContent = formatVnd(Math.round(cashShare / Math.max(1, it.qty))).replace(' đ','');
-                if (unitPointsEl) unitPointsEl.textContent = formatPoints(Math.round(pointsShare / Math.max(1, it.qty)));
             });
 
             if (conversionEl) conversionEl.textContent = formatVnd(discount);
@@ -307,7 +290,6 @@
             appliedInput.addEventListener('input', validateAndDisplay);
         }
 
-        // init on page load
         validateAndDisplay();
     })();
 </script>
