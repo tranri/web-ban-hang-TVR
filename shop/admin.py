@@ -3,14 +3,14 @@ from .models import Category, Product, ShopConfiguration, BannerImage, DocumentP
 from django import forms
 from django.utils.html import format_html
 from django.urls import reverse, path
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.db.models import Prefetch
 from django.utils import timezone
 from django.db import transaction
 from datetime import timedelta
 from django.utils.safestring import mark_safe
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
@@ -269,7 +269,6 @@ class OrderAdmin(admin.ModelAdmin):
         'created_at_display',
         'order_status',
         'points_display',
-        'points_status_display',
         'print_status_display',  # Đã có trong list_display
         'order_actions'
     ]
@@ -338,24 +337,6 @@ class OrderAdmin(admin.ModelAdmin):
                     points
                 )
         return "-"
-
-    @admin.display(description="Trạng thái điểm")
-    def points_status_display(self, obj):
-        """Show current status of points"""
-        if obj.points_awarded:
-            return mark_safe(
-                '<span style="color: #fff; background-color: #51cf66; padding: 4px 8px; border-radius: 3px; font-weight: bold;">✓ Đã cộng</span>'
-            )
-        elif obj.is_eligible_for_points():
-            return mark_safe(
-                '<span style="color: #fff; background-color: #ff9800; padding: 4px 8px; border-radius: 3px; font-weight: bold;">⚠ Sẵn sàng</span>'
-            )
-        else:
-            pending_points = obj.calculate_points()
-            return format_html(
-                '<span style="color: #fff; background-color: #ffc107; padding: 4px 8px; border-radius: 3px; font-weight: bold;">⏳ Chờ {}</span>',
-                pending_points
-            )
 
     def order_actions(self, obj):
         """Hiển thị các nút thao tác: In đơn hàng và Hoàn trả"""
@@ -636,7 +617,8 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone', 'created_at', 'customer_badge', 'points']
+    list_display = ['full_name', 'phone', 'created_at', 'customer_badge', 'points',
+                    'reset_password_button']  # Thêm nút vào danh sách
     list_filter = ['created_at', 'phone']
     search_fields = ['full_name', 'phone']
     ordering = ['-created_at']
@@ -651,6 +633,83 @@ class CustomerAdmin(admin.ModelAdmin):
         )
 
     customer_badge.short_description = "Mã khách"
+
+    # --- THÊM TÍNH NĂNG CẤP LẠI MẬT KHẨU ---
+
+    def reset_password_button(self, obj):
+        """Hiển thị nút Đổi mật khẩu nhanh trong bảng danh sách khách hàng"""
+        url = reverse('admin:customer_reset_password', args=[obj.pk])
+        return format_html(
+            '<a class="button" style="background: #ba2121; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;" href="{}">Cấp lại MK</a>',
+            url)
+
+    reset_password_button.short_description = "Đổi mật khẩu"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('<path:object_id>/reset-password/', self.admin_site.admin_view(self.reset_password_view),
+                 name='customer_reset_password'),
+        ]
+        return custom_urls + urls
+
+    def reset_password_view(self, request, object_id):
+        """Giao diện và logic nhận mật khẩu mới do nhân viên nhập cho khách"""
+        customer = get_object_or_404(Customer, pk=object_id)
+
+        if request.method == 'POST':
+            new_password = request.POST.get('new_password')
+            if not new_password or len(new_password.strip()) < 4:
+                messages.error(request, "Mật khẩu mới quá ngắn hoặc không được để trống!")
+            else:
+                customer.set_password(new_password.strip())
+                customer.save(update_fields=['password'])
+                messages.success(request,
+                                 f"Đã cấp lại mật khẩu thành công cho khách hàng: {customer.full_name} ({customer.phone})")
+                return redirect('admin:shop_customer_changelist')
+
+        from django.template import Template, RequestContext
+
+        template_str = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cấp lại mật khẩu khách hàng</title>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; }
+                .box { max-width: 400px; margin: auto; background: #fff; padding: 25px; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h2 { color: #333; font-size: 18px; margin-top: 0; }
+                p { color: #666; font-size: 14px; }
+                input[type="text"] { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+                button { background: #417690; color: white; border: none; padding: 10px 15px; font-size: 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+                button:hover { background: #205067; }
+                a { margin-left: 10px; color: #666; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h2>Cấp lại mật khẩu cho: {{ customer.full_name }}</h2>
+                <p>Số điện thoại: <b>{{ customer.phone }}</b></p>
+                <form method="post">
+                    {% csrf_token %}
+                    <label>Nhập mật khẩu mới:</label>
+                    <input type="text" name="new_password" placeholder="Nhập mật khẩu mới cho khách..." required autofocus>
+                    <div>
+                        <button type="submit">Lưu mật khẩu mới</button>
+                        <a href="{% url 'admin:shop_customer_changelist' %}">Quay lại</a>
+                    </div>
+                </form>
+            </div>
+        </body>
+        </html>
+        """
+        t = Template(template_str)
+
+        # ĐỔI TỪ Context SANG RequestContext ĐỂ NHẬN ĐƯỢC CSRF TOKEN
+        c = RequestContext(request, {'customer': customer})
+
+        return HttpResponse(t.render(c))
 
 
 class SafeUserAdmin(DjangoUserAdmin):

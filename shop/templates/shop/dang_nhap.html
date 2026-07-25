@@ -32,9 +32,12 @@
                         <input type="text" name="phone" class="form-control" required placeholder="Nhập SĐT...">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Mật khẩu</label>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small fw-bold mb-0">Mật khẩu</label>
+                            <a href="#" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" class="small text-muted text-decoration-none">Quên mật khẩu?</a>
+                        </div>
                         <!-- ✅ IMPROVED - Add password visibility toggle for login -->
-                        <div class="password-input-wrapper">
+                        <div class="password-input-wrapper mt-1">
                             <input type="password" name="password" id="login-password" class="form-control" required
                                    placeholder="Nhập mật khẩu...">
                             <button type="button" class="password-toggle-btn" data-target="#login-password">
@@ -136,5 +139,39 @@
         });
     });
 </script>
+<div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fs-6 fw-bold" id="forgotPasswordModalLabel">Khôi phục mật khẩu</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="mb-2">Quý khách vui lòng liên hệ trực tiếp với cửa hàng để được hỗ trợ cấp lại mật khẩu nhanh chóng:</p>
+                <h4 class="text-success fw-bold my-3">📞 Hotline / Zalo: {{ config.phone }}</h4>
+                <p class="text-muted small mb-0">Nhân viên cửa hàng sẽ xác thực thông tin và cung cấp mật khẩu mới cho quý khách.</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <!-- Dùng cú pháp gọi hàm moAppZalo tương tự trang liên hệ -->
+                <button type="button" onclick="moAppZalo()" class="btn btn-success btn-sm px-4 fw-bold">
+                    Chat Zalo Ngay
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Hàm xử lý mở App Zalo thông minh được trích xuất từ trang liên hệ -->
+<script>
+    function moAppZalo() {
+        var sdtZalo = "{{ config.zalo_phone }}";
+        window.location.href = "zalo://conversation?phone=" + sdtZalo;
+        setTimeout(function() {
+            if (!document.hidden) {
+                window.open("https://zalo.me/" + sdtZalo, '_blank');
+            }
+        }, 1500);
+    }
+</script>
 {% endblock %}

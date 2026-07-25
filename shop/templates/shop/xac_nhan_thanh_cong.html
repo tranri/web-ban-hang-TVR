@@ -18,11 +18,11 @@
                 {% if order.applied_points and order.applied_points > 0 %}
                 <div class="alert alert-success mt-3">
                     <p class="mb-1">
-                        <strong>Điểm đã sử dụng:</strong> {{ order.applied_points }} điểm
+                        <strong>Bạn sử dụng:</strong> {{ order.applied_points }} điểm
                         (Giảm {{ order.applied_points|intcomma }} đ)
                     </p>
                     <p class="mb-0">
-                        <strong>Thành tiền sau khi trừ điểm:</strong>
+                        <strong>Thanh toán đơn hàng:</strong>
                         {{ order.final_price|intcomma }} đ
                     </p>
                 </div>
