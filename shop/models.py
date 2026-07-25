@@ -185,20 +185,23 @@ class DocumentPost(models.Model):
 
 
 class Order(models.Model):
-    # Thêm verbose_name vào các trường
+    ORDER_DURATION = timedelta(days=5)  # days=5    seconds=10
+
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='orders',
                                  verbose_name="Khách hàng")
     full_name = models.CharField(max_length=255, verbose_name="Họ và tên")
     phone = models.CharField(max_length=20, verbose_name="Số điện thoại")
     address = models.TextField(verbose_name="Địa chỉ")
     note = models.TextField(blank=True, null=True, verbose_name="Ghi chú")
-    total_price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tổng tiền")
+    total_price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tổng tiền Chưa Giảm")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày có đơn hàng")
     points_awarded = models.BooleanField(default=False, verbose_name="Đã cộng điểm")
-    awarded_points = models.IntegerField(default=0, verbose_name="Số điểm đã cộng")
-    applied_points = models.IntegerField(default=0, verbose_name="Điểm sử dụng")
-    final_price = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Tổng sau khi trừ điểm")
-
+    awarded_points = models.IntegerField(default=0, verbose_name="Số điểm cộng khi hoàn tất đơn hàng")
+    applied_points = models.IntegerField(default=0, verbose_name="Điểm dùng để giảm giá")
+    final_price = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Thanh Toán(VNĐ)")
+    is_printed = models.BooleanField(default=False, verbose_name="Đã in hóa đơn")
+    printed_at = models.DateTimeField(null=True, blank=True, verbose_name="Thời gian in")
+    
     class Meta:
         verbose_name = "Đơn hàng"
         verbose_name_plural = "Quản lý đơn hàng"
@@ -218,15 +221,12 @@ class Order(models.Model):
 
     def is_completed(self):
         now = timezone.now()
-        return (now - self.created_at) >= timedelta(seconds=50)  # days=5
+        return (now - self.created_at) >= self.ORDER_DURATION
 
     def is_eligible_for_points(self):
         return self.is_completed() and not self.points_awarded
 
     def apply_points_value(self):
-        """
-        Return VND value of applied points. Conversion: 1000 points = 1000 VND => 1 point = 1 VND.
-        """
         try:
             return Decimal(int(self.applied_points))
         except Exception:
@@ -319,12 +319,12 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
-    # Thêm verbose_name cho từng trường
     product = models.ForeignKey('Product', on_delete=models.CASCADE, verbose_name="Sản phẩm")
     quantity = models.PositiveIntegerField(verbose_name="Số lượng")
     price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Giá")
     discount_per_unit = models.DecimalField(max_digits=12, decimal_places=0, default=0,
                                             verbose_name="Giảm giá mỗi đơn vị")
+    returned_quantity = models.PositiveIntegerField(default=0, verbose_name="Số lượng trả hàng")
 
     class Meta:
         verbose_name = "Mục hàng"
@@ -332,4 +332,4 @@ class OrderItem(models.Model):
         verbose_name_plural = "Chi tiết đơn hàng"
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return ""
