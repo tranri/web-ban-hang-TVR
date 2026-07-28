@@ -96,10 +96,68 @@
 
         const ctx = document.getElementById('financeChart').getContext('2d');
 
-        // Destroy existing chart instance if reloaded (avoid duplication in dev)
         if (window._financeChartInstance) {
             window._financeChartInstance.destroy();
         }
+
+        // small helper to format VNĐ with dot thousands
+        function formatVND(v) {
+            try {
+                return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + 'đ';
+            } catch (e) {
+                return v;
+            }
+        }
+
+        // Plugin: draw percent labels inside COGS & Profit bars
+        const percentLabelPlugin = {
+            id: 'percentLabelPlugin',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                const data = chart.data;
+                // revenue is dataset 0; cogs dataset 1; profit dataset 2
+                const revenueDataset = data.datasets[0] || { data: [] };
+                // Only draw for COGS (index 1) and Profit (index 2)
+                [1, 2].forEach(dsIndex => {
+                    const meta = chart.getDatasetMeta(dsIndex);
+                    if (!meta || !meta.data) return;
+                    meta.data.forEach((bar, i) => {
+                        const value = (data.datasets[dsIndex].data[i] || 0);
+                        const rev = (revenueDataset.data[i] || 0);
+                        const pct = rev ? Math.round((value / rev) * 100) : 0;
+                        const text = pct + '%';
+
+                        // calculate vertical center of the bar
+                        const barTop = bar.y;
+                        const barBottom = bar.base;
+                        const centerY = (barTop + barBottom) / 2;
+
+                        // choose text color that contrasts with bar color
+                        // use white for darker colored bars
+                        ctx.save();
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = '12px sans-serif';
+
+                        // pick color based on dataset index (match dataset colors)
+                        // COGS (orange) and Profit (green) -> text white
+                        ctx.fillStyle = '#ffffff';
+
+                        // if the bar is very small (height small), draw label above the bar instead
+                        const barHeight = Math.abs(barBottom - barTop);
+                        if (barHeight < 18) {
+                            // draw above the bar
+                            ctx.fillStyle = '#263238';
+                            ctx.fillText(text, bar.x, barTop - 8);
+                        } else {
+                            ctx.fillText(text, bar.x, centerY);
+                        }
+
+                        ctx.restore();
+                    });
+                });
+            }
+        };
 
         window._financeChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -131,13 +189,8 @@
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            callback: function(value, index, values) {
-                                // format tick as VNĐ with dot thousands (simple)
-                                try {
-                                    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + 'đ';
-                                } catch (e) {
-                                    return value;
-                                }
+                            callback: function(value) {
+                                return formatVND(value);
                             }
                         }
                     }
@@ -146,18 +199,25 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                let v = context.raw || 0;
-                                try {
-                                    return context.dataset.label + ': ' + v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + 'đ';
-                                } catch (e) {
-                                    return context.dataset.label + ': ' + v;
+                                const dsIndex = context.datasetIndex;
+                                const idx = context.dataIndex;
+                                const label = context.dataset.label || '';
+                                const raw = context.raw || 0;
+                                if (label === 'Doanh Thu') {
+                                    return label + ': ' + formatVND(raw);
                                 }
+                                // compute percent relative to revenue
+                                const rev = (revenueData[idx] || 0);
+                                const pct = rev ? Math.round((raw / rev) * 100) : 0;
+                                return label + ': ' + formatVND(raw) + ' (' + pct + '%)';
                             }
                         }
                     },
                     legend: { position: 'top' }
-                }
-            }
+                },
+                // keep default animation
+            },
+            plugins: [percentLabelPlugin]
         });
     })();
 </script>

@@ -501,7 +501,8 @@ def xac_nhan_don_hang(request):
                             product=product,
                             quantity=qty,
                             price=product.price,
-                            discount_per_unit=disc_per_unit
+                            discount_per_unit=disc_per_unit,
+                            import_price=product.import_price,  # record purchase/import price at time of sale
                         )
 
                     # Create or update a Customer

@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError as AdminValidationError
 import json
-from django.db.models.functions import TruncDay, TruncMonth
+from django.db.models.functions import TruncDay, TruncMonth, Coalesce
 
 
 class BannerImageInline(admin.TabularInline):
@@ -763,7 +763,7 @@ class SalesReportAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
-        group = request.GET.get('group', 'day')  # 'day' or 'month'
+        group = request.GET.get('group', 'month')  # 'day' or 'month'
         try:
             if date_from:
                 dt_from = timezone.make_aware(datetime.strptime(date_from, "%Y-%m-%d"))
@@ -781,14 +781,23 @@ class SalesReportAdmin(admin.ModelAdmin):
 
         # Expressions for calculations
         sold_qty_expr = ExpressionWrapper(F('quantity') - F('returned_quantity'), output_field=DecimalField())
-        unit_price_expr = ExpressionWrapper(F('price') - F('discount_per_unit'),
-                                            output_field=DecimalField(max_digits=18, decimal_places=2))
+        unit_price_expr = ExpressionWrapper(
+            F('price') - F('discount_per_unit'),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
 
+        # cost per unit: prefer OrderItem.import_price (historical), fallback to product.import_price
+        cost_per_unit_expr = ExpressionWrapper(
+            Coalesce(F('import_price'), F('product__import_price')),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
+
+        # revenue, cogs, profit using the cost_per_unit_expr
         revenue_expr = ExpressionWrapper(unit_price_expr * sold_qty_expr,
                                          output_field=DecimalField(max_digits=18, decimal_places=2))
-        cogs_expr = ExpressionWrapper(F('product__import_price') * sold_qty_expr,
+        cogs_expr = ExpressionWrapper(cost_per_unit_expr * sold_qty_expr,
                                       output_field=DecimalField(max_digits=18, decimal_places=2))
-        profit_expr = ExpressionWrapper((unit_price_expr - F('product__import_price')) * sold_qty_expr,
+        profit_expr = ExpressionWrapper((unit_price_expr - cost_per_unit_expr) * sold_qty_expr,
                                         output_field=DecimalField(max_digits=18, decimal_places=2))
 
         items_qs = OrderItem.objects.filter(order__created_at__gte=dt_from, order__created_at__lte=dt_to)

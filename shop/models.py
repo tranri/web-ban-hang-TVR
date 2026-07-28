@@ -326,6 +326,13 @@ class OrderItem(models.Model):
                                             verbose_name="Giảm giá mỗi đơn vị")
     returned_quantity = models.PositiveIntegerField(default=0, verbose_name="Số lượng trả hàng")
 
+    # New: record product import price at the time of sale so COGS is historical.
+    # Make it nullable so old rows without a saved import price will fall back to product.import_price.
+    import_price = models.DecimalField(
+        max_digits=12, decimal_places=0, null=True, blank=True, default=None,
+        verbose_name="Giá nhập (tại thời điểm bán, VNĐ)"
+    )
+
     class Meta:
         verbose_name = "Mục hàng"
         # Dòng này sẽ thay đổi tiêu đề "ORDER ITEMS" thành "Chi tiết đơn hàng"
