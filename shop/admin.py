@@ -18,6 +18,9 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError as AdminValidationError
 import json
 from django.db.models.functions import TruncDay, TruncMonth, Coalesce
+import io
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 
 class BannerImageInline(admin.TabularInline):
@@ -894,13 +897,7 @@ class SalesReportAdmin(admin.ModelAdmin):
             [:30]
         )
 
-        # JSON for template (chart)
-        chart_labels_json = json.dumps(labels)
-        chart_revenue_json = json.dumps(rev_data)
-        chart_cogs_json = json.dumps(cogs_data)
-        chart_profit_json = json.dumps(profit_data)
-
-        # Formatters
+        # Build top_products list for template with formatted values and admin product URL
         def fmt_money(v):
             try:
                 return f"{int(v):,}".replace(",", ".") + "đ"
@@ -913,15 +910,10 @@ class SalesReportAdmin(admin.ModelAdmin):
             except Exception:
                 return "0"
 
-        total_revenue_display = fmt_money(total_revenue)
-        total_cogs_display = fmt_money(total_cogs)
-        total_profit_display = fmt_money(total_profit)
-        inventory_value_display = fmt_money(inventory_value)
-        total_orders_display = fmt_int(total_orders)
-
-        # Build top_products list for template with formatted values and admin product URL
         top_products = []
-        for row in top_qs:
+        # convert top_qs to list so we can iterate multiple times safely
+        top_qs_list = list(top_qs)
+        for row in top_qs_list:
             pid = row.get('product__id')
             name = row.get('product__name') or "—"
             code = row.get('product__code') or ""
@@ -950,6 +942,159 @@ class SalesReportAdmin(admin.ModelAdmin):
             date_range_display = df_str if df_str == dt_str else f"{df_str} — {dt_str}"
         except Exception:
             date_range_display = ''
+
+        # --- Excel export (after top_products/top_qs_list built, before final context) ---
+        # --- Excel export (insert here, after top_products is built, before json dumps / context) ---
+        export = request.GET.get('export')
+        if export in ('xlsx', 'excel'):
+            # lazy import fallback if openpyxl not available globally
+            try:
+                # if not imported at top, import here:
+                from openpyxl import Workbook
+                from openpyxl.utils import get_column_letter
+                from openpyxl.chart import BarChart, Reference
+            except Exception:
+                messages.error(request, "openpyxl không được cài đặt; không thể xuất Excel.")
+                # fall back to render the page normally
+            else:
+                wb = Workbook()
+                # Summary sheet
+                ws = wb.active
+                ws.title = "Bảng Tóm Tắt"
+                ws.append(["Báo Cáo Tài Chính"])
+                ws.append([])
+                ws.append(["Khoảng thời gian", date_range_display or ""])
+                # Write totals as numbers
+                ws.append(["Tổng Doanh thu", float(total_revenue)])
+                ws.append(["Tổng Giá vốn", float(total_cogs)])
+                ws.append(["Tổng Lợi nhuận", float(total_profit)])
+                ws.append(["Số đơn hàng", int(total_orders)])
+                ws.append(["Giá trị tồn kho", float(inventory_value)])
+                ws.append([])
+
+                # Period sheet (chart numbers)
+                ws2 = wb.create_sheet(title="Period")
+                # Header
+                ws2.append(["Period", "Revenue", "COGS", "Profit", "COGS % of Revenue", "Profit % of Revenue"])
+                for i, label in enumerate(labels):
+                    rev = rev_data[i] if i < len(rev_data) else 0
+                    cogs = cogs_data[i] if i < len(cogs_data) else 0
+                    prof = profit_data[i] if i < len(profit_data) else 0
+                    cogs_pct = round((cogs / rev) * 100, 2) if rev else 0
+                    prof_pct = round((prof / rev) * 100, 2) if rev else 0
+                    # Append numeric values so charts use numbers
+                    ws2.append([label, rev, cogs, prof, cogs_pct, prof_pct])
+
+                # Add bar chart for Period (Revenue / COGS / Profit)
+                try:
+                    if len(labels) >= 1:
+                        chart = BarChart()
+                        chart.type = "col"
+                        chart.style = 10
+                        chart.title = "Doanh thu - Giá vốn - Lợi nhuận"
+                        chart.y_axis.title = 'VNĐ'
+                        chart.x_axis.title = 'Period'
+
+                        data_ref = Reference(ws2, min_col=2, min_row=1, max_col=4, max_row=1 + len(labels))
+                        # include titles_from_data=False as header is included
+                        chart.add_data(data_ref, titles_from_data=True)
+
+                        cats = Reference(ws2, min_col=1, min_row=2, max_row=1 + len(labels))
+                        chart.set_categories(cats)
+                        chart.width = 20
+                        chart.height = 10
+                        ws2.add_chart(chart, "H2")
+                except Exception:
+                    # non-fatal: chart creation can fail in limited envs
+                    pass
+
+                # Top products sheet (with Rank)
+                ws3 = wb.create_sheet(title="Top Products")
+                ws3.append(["Rank", "Product ID", "Product Name", "Code", "Quantity Sold", "Revenue"])
+                # top_products is already ordered by qty; ensure numeric values
+                for idx, p in enumerate(top_products, start=1):
+                    ws3.append([idx, p.get('id'), p.get('name'), p.get('code'), int(p.get('qty') or 0),
+                                int(p.get('revenue') or 0)])
+
+                # Also create a ranking-only sheet (numerical table)
+                ws_rank = wb.create_sheet(title="Top Products Ranking")
+                ws_rank.append(["Rank", "Product ID", "Product Name", "Quantity Sold", "Revenue"])
+                for idx, p in enumerate(top_products, start=1):
+                    ws_rank.append(
+                        [idx, p.get('id'), p.get('name'), int(p.get('qty') or 0), int(p.get('revenue') or 0)])
+
+                # Add a simple bar chart for Top Products (top N quantities)
+                try:
+                    top_count = min(20, len(top_products))
+                    if top_count > 0:
+                        # We put the chart on ws3; data rows start at row 2
+                        chart2 = BarChart()
+                        chart2.type = "col"
+                        chart2.style = 12
+                        chart2.title = f"Top {top_count} Products - Quantity Sold"
+                        chart2.y_axis.title = 'Quantity'
+                        chart2.x_axis.title = 'Product'
+
+                        data_ref2 = Reference(ws3, min_col=5, min_row=1,
+                                              max_row=1 + top_count)  # Quantity column (col 5)
+                        # include header (titles_from_data=True) if header present
+                        chart2.add_data(data_ref2, titles_from_data=True)
+
+                        cats2 = Reference(ws3, min_col=3, min_row=2, max_row=1 + top_count)  # Product Name (col 3)
+                        chart2.set_categories(cats2)
+                        chart2.width = 20
+                        chart2.height = 10
+                        ws3.add_chart(chart2, "H2")
+                except Exception:
+                    pass
+
+                # Inventory sheet - per product stock value
+                ws4 = wb.create_sheet(title="Inventory")
+                ws4.append(["Product ID", "Product Name", "Code", "Stock", "Import Price", "Stock Value"])
+                products = Product.objects.all().values('id', 'name', 'code', 'stock', 'import_price')
+                for pr in products:
+                    stock = pr.get('stock') or 0
+                    ip = pr.get('import_price') or 0
+                    value = int(stock) * float(ip)
+                    ws4.append([pr.get('id'), pr.get('name'), pr.get('code'), int(stock), float(ip), value])
+
+                # Auto-width (optional)
+                for wsx in (ws, ws2, ws3, ws_rank, ws4):
+                    if wsx is None:
+                        continue
+                    for col in range(1, (wsx.max_column or 1) + 1):
+                        col_letter = get_column_letter(col)
+                        try:
+                            wsx.column_dimensions[col_letter].width = 18
+                        except Exception:
+                            pass
+
+                # Save to BytesIO and return response
+                stream = io.BytesIO()
+                wb.save(stream)
+                stream.seek(0)
+                fname = f"financial_report_{group}_{dt_from.date().isoformat()}_{dt_to.date().isoformat()}.xlsx"
+                response = HttpResponse(
+                    stream.getvalue(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                response['Content-Disposition'] = f'attachment; filename="{fname}"'
+                return response
+        # --- end Excel export ---
+
+        # --- end Excel export ---
+
+        # JSON for template (chart)
+        chart_labels_json = json.dumps(labels)
+        chart_revenue_json = json.dumps(rev_data)
+        chart_cogs_json = json.dumps(cogs_data)
+        chart_profit_json = json.dumps(profit_data)
+
+        total_revenue_display = fmt_money(total_revenue)
+        total_cogs_display = fmt_money(total_cogs)
+        total_profit_display = fmt_money(total_profit)
+        inventory_value_display = fmt_money(inventory_value)
+        total_orders_display = fmt_int(total_orders)
 
         context = {
             'title': 'Báo Cáo Tài Chính',

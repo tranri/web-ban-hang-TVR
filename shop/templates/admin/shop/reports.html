@@ -17,6 +17,11 @@
         <a href="?date_from={{ date_from }}&date_to={{ date_to }}&group=month"
            class="button"
            style="{% if chart_group == 'month' %}background:#2b8a3e;color:#fff;border:none{% endif %}">Tháng</a>
+
+        {# Export Excel button: preserves current filters and group #}
+        <a href="?date_from={{ date_from }}&date_to={{ date_to }}&group={{ chart_group }}&export=xlsx"
+           class="button"
+           style="margin-left:10px; background:#1e88e5; color:#fff; border:none;">Export Excel</a>
     </div>
 </form>
 
