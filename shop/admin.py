@@ -148,16 +148,42 @@ class ProductAdmin(admin.ModelAdmin):
                            f"Không thể cập nhật: Giá nhập mới phải khác 0!")
             return redirect('admin:shop_product_changelist')
 
-        product.sale_price = product.price
-        if product.new_import_price and product.new_import_price > 0:
-            product.import_price = product.new_import_price
-            product.new_import_price = 0
+        # At this point we will replace the product.import_price with new_import_price.
+        # To avoid changing historical COGS for previously sold items, backfill OrderItem.import_price
+        # for any OrderItem rows of this product that have import_price IS NULL using the current (old) import price.
+        old_import_price = product.import_price
+        new_import_price = product.new_import_price
 
-        product.stock = product.new_stock if product.new_stock is not None else 0
-        product.new_stock = 0
+        try:
+            with transaction.atomic():
+                backfilled = 0
+                # Only attempt backfill if we have an old import price to preserve
+                if old_import_price is not None:
+                    # Only backfill order items that were sold before now (they represent old stock)
+                    backfilled = OrderItem.objects.filter(
+                        product=product,
+                        import_price__isnull=True,
+                        order__created_at__lte=timezone.now()
+                    ).update(import_price=old_import_price)
 
-        product.save()
-        messages.success(request, f"Đã cập nhật thành công sản phẩm: {product.name}")
+                # Now apply the new import price and new stock
+                product.sale_price = product.price
+                if new_import_price and new_import_price > 0:
+                    product.import_price = new_import_price
+                    product.new_import_price = 0
+
+                product.stock = product.new_stock if product.new_stock is not None else 0
+                product.new_stock = 0
+
+                product.save()
+
+                msg = f"Đã cập nhật thành công sản phẩm: {product.name}."
+                if backfilled:
+                    msg += f" Đã lưu giá nhập cũ vào {backfilled} mục đơn hàng để bảo toàn báo cáo giá vốn."
+                messages.success(request, msg)
+        except Exception as e:
+            messages.error(request, f"Lỗi khi cập nhật sản phẩm: {str(e)}")
+            return redirect('admin:shop_product_changelist')
 
         return redirect('admin:shop_product_changelist')
 
