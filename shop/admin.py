@@ -1,20 +1,23 @@
 from django.contrib import admin
-from .models import Category, Product, ShopConfiguration, BannerImage, DocumentPost, Order, OrderItem, Customer
+from .models import Category, Product, ShopConfiguration, BannerImage, DocumentPost, Order, OrderItem, Customer, \
+    SalesReport
 from django import forms
 from django.utils.html import format_html
 from django.urls import reverse, path
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Sum, F, ExpressionWrapper, DecimalField, Q
 from django.utils import timezone
 from django.db import transaction
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.utils.safestring import mark_safe
 from decimal import Decimal
 from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError as AdminValidationError
+import json
+from django.db.models.functions import TruncDay, TruncMonth
 
 
 class BannerImageInline(admin.TabularInline):
@@ -742,3 +745,195 @@ try:
 except Exception:
     pass
 admin.site.register(User, SafeUserAdmin)
+
+
+@admin.register(SalesReport)
+class SalesReportAdmin(admin.ModelAdmin):
+    change_list_template = "admin/shop/reports.html"  # uses the report template
+
+    # Make it visible to staff regardless of model permissions (so it appears in the menu)
+    def get_model_perms(self, request):
+        # return True for 'view' so entry shows in app index and left menu
+        return {'add': False, 'change': False, 'delete': False, 'view': True}
+
+    def has_view_permission(self, request, obj=None):
+        # keep default behavior but ensure staff can view
+        return request.user.is_active and request.user.is_staff
+
+    def changelist_view(self, request, extra_context=None):
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        group = request.GET.get('group', 'day')  # 'day' or 'month'
+        try:
+            if date_from:
+                dt_from = timezone.make_aware(datetime.strptime(date_from, "%Y-%m-%d"))
+            else:
+                dt_from = timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+
+            if date_to:
+                dt_to_date = datetime.strptime(date_to, "%Y-%m-%d")
+                dt_to = timezone.make_aware(datetime.combine(dt_to_date, datetime.max.time()))
+            else:
+                dt_to = timezone.localtime(timezone.now())
+        except Exception:
+            dt_from = timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+            dt_to = timezone.localtime(timezone.now())
+
+        # Expressions for calculations
+        sold_qty_expr = ExpressionWrapper(F('quantity') - F('returned_quantity'), output_field=DecimalField())
+        unit_price_expr = ExpressionWrapper(F('price') - F('discount_per_unit'),
+                                            output_field=DecimalField(max_digits=18, decimal_places=2))
+
+        revenue_expr = ExpressionWrapper(unit_price_expr * sold_qty_expr,
+                                         output_field=DecimalField(max_digits=18, decimal_places=2))
+        cogs_expr = ExpressionWrapper(F('product__import_price') * sold_qty_expr,
+                                      output_field=DecimalField(max_digits=18, decimal_places=2))
+        profit_expr = ExpressionWrapper((unit_price_expr - F('product__import_price')) * sold_qty_expr,
+                                        output_field=DecimalField(max_digits=18, decimal_places=2))
+
+        items_qs = OrderItem.objects.filter(order__created_at__gte=dt_from, order__created_at__lte=dt_to)
+
+        # Totals (overall)
+        agg = items_qs.aggregate(
+            total_revenue=Sum(revenue_expr),
+            total_cogs=Sum(cogs_expr),
+            total_profit=Sum(profit_expr),
+        )
+
+        total_revenue = agg.get('total_revenue') or Decimal('0')
+        total_cogs = agg.get('total_cogs') or Decimal('0')
+        total_profit = agg.get('total_profit') or Decimal('0')
+
+        # Orders count
+        total_orders = Order.objects.filter(created_at__gte=dt_from, created_at__lte=dt_to).count()
+
+        # Inventory value
+        inv_agg = Product.objects.aggregate(inventory_value=Sum(ExpressionWrapper(F('stock') * F('import_price'),
+                                                                                  output_field=DecimalField(
+                                                                                      max_digits=18,
+                                                                                      decimal_places=2))))
+        inventory_value = inv_agg['inventory_value'] or Decimal('0')
+
+        # --- Period aggregation for chart ---
+        period_field = TruncDay('order__created_at') if group == 'day' else TruncMonth('order__created_at')
+
+        period_qs = items_qs.annotate(period=period_field).values('period').annotate(
+            period_revenue=Sum(revenue_expr),
+            period_cogs=Sum(cogs_expr),
+            period_profit=Sum(profit_expr),
+        ).order_by('period')
+
+        labels = []
+        rev_data = []
+        cogs_data = []
+        profit_data = []
+
+        for row in period_qs:
+            p = row.get('period')
+            if not p:
+                continue
+            if group == 'day':
+                label = p.strftime('%d/%m')
+            else:
+                label = p.strftime('%m/%Y')
+
+            labels.append(label)
+            rev_data.append(int(row.get('period_revenue') or 0))
+            cogs_data.append(int(row.get('period_cogs') or 0))
+            profit_data.append(int(row.get('period_profit') or 0))
+
+        # --- Top-selling products (within the selected range) ---
+        # group by product and sum sold_qty and revenue
+        top_qs = (
+            items_qs
+            .values('product__id', 'product__name', 'product__code')
+            .annotate(
+                qty_sold=Sum(sold_qty_expr),
+                revenue=Sum(revenue_expr),
+            )
+            .filter(
+                Q(product__id__isnull=False) &
+                (Q(qty_sold__gt=0) | Q(revenue__gt=0))
+            )
+            .order_by('-qty_sold')
+            [:30]
+        )
+
+        # JSON for template (chart)
+        chart_labels_json = json.dumps(labels)
+        chart_revenue_json = json.dumps(rev_data)
+        chart_cogs_json = json.dumps(cogs_data)
+        chart_profit_json = json.dumps(profit_data)
+
+        # Formatters
+        def fmt_money(v):
+            try:
+                return f"{int(v):,}".replace(",", ".") + "đ"
+            except Exception:
+                return "0đ"
+
+        def fmt_int(v):
+            try:
+                return f"{int(v):,}".replace(",", ".")
+            except Exception:
+                return "0"
+
+        total_revenue_display = fmt_money(total_revenue)
+        total_cogs_display = fmt_money(total_cogs)
+        total_profit_display = fmt_money(total_profit)
+        inventory_value_display = fmt_money(inventory_value)
+        total_orders_display = fmt_int(total_orders)
+
+        # Build top_products list for template with formatted values and admin product URL
+        top_products = []
+        for row in top_qs:
+            pid = row.get('product__id')
+            name = row.get('product__name') or "—"
+            code = row.get('product__code') or ""
+            qty = int(row.get('qty_sold') or 0)
+            rev = int(row.get('revenue') or 0)
+            product_url = reverse('admin:shop_product_change', args=[pid]) if pid else '#'
+            top_products.append({
+                'id': pid,
+                'name': name,
+                'code': code,
+                'qty': qty,
+                'qty_display': fmt_int(qty),
+                'revenue': rev,
+                'revenue_display': fmt_money(rev),
+                'url': product_url,
+            })
+
+        # ISO strings for date inputs (YYYY-MM-DD)
+        date_from_iso = dt_from.date().isoformat() if hasattr(dt_from, 'date') else ''
+        date_to_iso = dt_to.date().isoformat() if hasattr(dt_to, 'date') else ''
+
+        # Human-readable range dd/mm/yyyy
+        try:
+            df_str = dt_from.strftime('%d/%m/%Y')
+            dt_str = dt_to.strftime('%d/%m/%Y')
+            date_range_display = df_str if df_str == dt_str else f"{df_str} — {dt_str}"
+        except Exception:
+            date_range_display = ''
+
+        context = {
+            'title': 'Báo Cáo Tài Chính',
+            'total_revenue_display': total_revenue_display,
+            'total_cogs_display': total_cogs_display,
+            'total_profit_display': total_profit_display,
+            'inventory_value_display': inventory_value_display,
+            'total_orders_display': total_orders_display,
+            'date_from': date_from_iso,
+            'date_to': date_to_iso,
+            'date_range_display': date_range_display,
+            # chart context
+            'chart_labels_json': chart_labels_json,
+            'chart_revenue_json': chart_revenue_json,
+            'chart_cogs_json': chart_cogs_json,
+            'chart_profit_json': chart_profit_json,
+            'chart_group': group,
+            # top products
+            'top_products': top_products,
+        }
+
+        return render(request, self.change_list_template, context)

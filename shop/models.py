@@ -201,7 +201,7 @@ class Order(models.Model):
     final_price = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Thanh Toán(VNĐ)")
     is_printed = models.BooleanField(default=False, verbose_name="Đã in hóa đơn")
     printed_at = models.DateTimeField(null=True, blank=True, verbose_name="Thời gian in")
-    
+
     class Meta:
         verbose_name = "Đơn hàng"
         verbose_name_plural = "Quản lý đơn hàng"
@@ -333,3 +333,12 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return ""
+
+
+class SalesReport(Order):
+    """Proxy model used only to show a Reports link in Django admin under the shop app."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "Báo cáo"
+        verbose_name_plural = "Báo cáo"
