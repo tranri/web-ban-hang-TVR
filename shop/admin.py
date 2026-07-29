@@ -1,26 +1,29 @@
+import json
+import io
+from datetime import timedelta, datetime
+from decimal import Decimal
+
 from django.contrib import admin
-from .models import Category, Product, ShopConfiguration, BannerImage, DocumentPost, Order, OrderItem, Customer, \
-    SalesReport
 from django import forms
-from django.utils.html import format_html
+from django.utils.html import format_html, escape
 from django.urls import reverse, path
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.db.models import Prefetch, Sum, F, ExpressionWrapper, DecimalField, Q
 from django.utils import timezone
 from django.db import transaction
-from datetime import timedelta, datetime
 from django.utils.safestring import mark_safe
-from decimal import Decimal
 from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError as AdminValidationError
-import json
 from django.db.models.functions import TruncDay, TruncMonth, Coalesce
-import io
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
+from django.template import Template, RequestContext
+
+from .models import (
+    Category, Product, ShopConfiguration, BannerImage,
+    DocumentPost, Order, OrderItem, Customer, SalesReport
+)
 
 
 class BannerImageInline(admin.TabularInline):
@@ -943,125 +946,157 @@ class SalesReportAdmin(admin.ModelAdmin):
         except Exception:
             date_range_display = ''
 
-        # --- Excel export (after top_products/top_qs_list built, before final context) ---
-        # --- Excel export (insert here, after top_products is built, before json dumps / context) ---
+        # --- Excel export (replace existing export block with this) ---
+        # --- Excel export ---
         export = request.GET.get('export')
         if export in ('xlsx', 'excel'):
-            # lazy import fallback if openpyxl not available globally
             try:
-                # if not imported at top, import here:
                 from openpyxl import Workbook
                 from openpyxl.utils import get_column_letter
                 from openpyxl.chart import BarChart, Reference
+                from openpyxl.styles import Border, Side
             except Exception:
                 messages.error(request, "openpyxl không được cài đặt; không thể xuất Excel.")
-                # fall back to render the page normally
             else:
                 wb = Workbook()
-                # Summary sheet
+
+                # 1. Summary sheet
                 ws = wb.active
                 ws.title = "Bảng Tóm Tắt"
                 ws.append(["Báo Cáo Tài Chính"])
                 ws.append([])
                 ws.append(["Khoảng thời gian", date_range_display or ""])
-                # Write totals as numbers
+
                 ws.append(["Tổng Doanh thu", float(total_revenue)])
+                ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append(["Tổng Giá vốn", float(total_cogs)])
+                ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append(["Tổng Lợi nhuận", float(total_profit)])
+                ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append(["Số đơn hàng", int(total_orders)])
-                ws.append(["Giá trị tồn kho", float(inventory_value)])
+                ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
+                ws.append(["Tổng Giá Tồn Kho", float(inventory_value)])
+                ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append([])
 
-                # Period sheet (chart numbers)
-                ws2 = wb.create_sheet(title="Period")
-                # Header
-                ws2.append(["Period", "Revenue", "COGS", "Profit", "COGS % of Revenue", "Profit % of Revenue"])
+                # 2. Period sheet (chart numbers & layout)
+                ws2 = wb.create_sheet(title="Biểu Đồ Doanh Thu")
+                ws2.append(
+                    ["Thời Gian", "Doanh Thu", "Giá Vốn", "Lợi Nhuận", "Tỷ Lệ Giá Vốn (%)", "Bin Lợi Nhuận (%)"])
+
                 for i, label in enumerate(labels):
+                    label_str = label.strftime('%d/%m/%Y') if hasattr(label, 'strftime') else str(label)
                     rev = rev_data[i] if i < len(rev_data) else 0
                     cogs = cogs_data[i] if i < len(cogs_data) else 0
                     prof = profit_data[i] if i < len(profit_data) else 0
                     cogs_pct = round((cogs / rev) * 100, 2) if rev else 0
                     prof_pct = round((prof / rev) * 100, 2) if rev else 0
-                    # Append numeric values so charts use numbers
-                    ws2.append([label, rev, cogs, prof, cogs_pct, prof_pct])
 
-                # Add bar chart for Period (Revenue / COGS / Profit)
+                    ws2.append([label_str, rev, cogs, prof, cogs_pct, prof_pct])
+                    row_idx = ws2.max_row
+                    # Định dạng dấu phân cách hàng nghìn cho các cột số liệu
+                    ws2.cell(row=row_idx, column=2).number_format = '#,##0'
+                    ws2.cell(row=row_idx, column=3).number_format = '#,##0'
+                    ws2.cell(row=row_idx, column=4).number_format = '#,##0'
+                    ws2.cell(row=row_idx, column=5).number_format = '0.00'
+                    ws2.cell(row=row_idx, column=6).number_format = '0.00'
+
+                # Add bar chart for Period
                 try:
                     if len(labels) >= 1:
+                        from openpyxl.chart.label import DataLabelList
+
                         chart = BarChart()
                         chart.type = "col"
                         chart.style = 10
                         chart.title = "Doanh thu - Giá vốn - Lợi nhuận"
                         chart.y_axis.title = 'VNĐ'
-                        chart.x_axis.title = 'Period'
+                        chart.x_axis.title = 'Thời gian'
 
                         data_ref = Reference(ws2, min_col=2, min_row=1, max_col=4, max_row=1 + len(labels))
-                        # include titles_from_data=False as header is included
                         chart.add_data(data_ref, titles_from_data=True)
 
                         cats = Reference(ws2, min_col=1, min_row=2, max_row=1 + len(labels))
                         chart.set_categories(cats)
-                        chart.width = 20
-                        chart.height = 10
+
+                        chart.dataLabels = DataLabelList()
+                        chart.dataLabels.showVal = True
+                        chart.dataLabels.showSerName = False
+                        chart.dataLabels.showCatName = False
+
+                        chart.width = 24
+                        chart.height = 12
+
+                        # Thay đổi màu sắc biểu đồ phù hợp với web (Doanh thu: Xanh dương, Giá vốn: Đỏ, Lợi nhuận: Xanh lá)
+                        web_colors = ["3B82F6", "EF4444", "10B981"]
+                        for idx, series in enumerate(chart.series):
+                            if idx < len(web_colors):
+                                series.graphicalProperties.solidFill = web_colors[idx]
+
                         ws2.add_chart(chart, "H2")
+
+                        # Điều chỉnh vị trí đặt bảng bên dưới biểu đồ dựa trên kích thước (chiều cao) thực tế của biểu đồ
+                        chart_start_row = 2  # Biểu đồ bắt đầu từ dòng 2 (H2)
+                        chart_height_in_rows = int(
+                            chart.height * 2)  # Quy đổi chiều cao cm sang số dòng Excel (~2 dòng/cm)
+                        start_row = chart_start_row + chart_height_in_rows + 2  # Thêm khoảng đệm 2 dòng trống
+
+                        header_row = start_row
+                        ws2.cell(row=header_row, column=8, value="Thời Gian")
+                        ws2.cell(row=header_row, column=9, value="Doanh Thu")
+                        ws2.cell(row=header_row, column=10, value="Giá Vốn")
+                        ws2.cell(row=header_row, column=11, value="Lợi Nhuận")
+
+                        for i, label in enumerate(labels):
+                            row_idx = header_row + 1 + i
+                            label_str = label.strftime('%d/%m/%Y') if hasattr(label, 'strftime') else str(label)
+                            rev = rev_data[i] if i < len(rev_data) else 0
+                            cogs = cogs_data[i] if i < len(cogs_data) else 0
+                            prof = profit_data[i] if i < len(profit_data) else 0
+
+                            ws2.cell(row=row_idx, column=8, value=label_str)
+
+                            r_cell = ws2.cell(row=row_idx, column=9, value=rev)
+                            r_cell.number_format = '#,##0'
+
+                            c_cell = ws2.cell(row=row_idx, column=10, value=cogs)
+                            c_cell.number_format = '#,##0'
+
+                            p_cell = ws2.cell(row=row_idx, column=11, value=prof)
+                            p_cell.number_format = '#,##0'
+
                 except Exception:
-                    # non-fatal: chart creation can fail in limited envs
                     pass
 
-                # Top products sheet (with Rank)
-                ws3 = wb.create_sheet(title="Top Products")
-                ws3.append(["Rank", "Product ID", "Product Name", "Code", "Quantity Sold", "Revenue"])
-                # top_products is already ordered by qty; ensure numeric values
+                # 3. Top products sheet
+                ws3 = wb.create_sheet(title="Sản Phẩm Bán Chạy")
+                ws3.append(["Thứ hạng", "Tên Sản Phẩm", "Số Lượng Bán", "Doanh Thu"])
                 for idx, p in enumerate(top_products, start=1):
-                    ws3.append([idx, p.get('id'), p.get('name'), p.get('code'), int(p.get('qty') or 0),
+                    ws3.append([idx, p.get('name') or "", int(p.get('qty') or 0),
                                 int(p.get('revenue') or 0)])
+                    row_idx = ws3.max_row
+                    ws3.cell(row=row_idx, column=1).number_format = '#,##0'
+                    ws3.cell(row=row_idx, column=3).number_format = '#,##0'
+                    ws3.cell(row=row_idx, column=4).number_format = '#,##0'
 
-                # Also create a ranking-only sheet (numerical table)
-                ws_rank = wb.create_sheet(title="Top Products Ranking")
-                ws_rank.append(["Rank", "Product ID", "Product Name", "Quantity Sold", "Revenue"])
-                for idx, p in enumerate(top_products, start=1):
-                    ws_rank.append(
-                        [idx, p.get('id'), p.get('name'), int(p.get('qty') or 0), int(p.get('revenue') or 0)])
+                # Thin border style for all data cells
+                thin_border = Border(
+                    left=Side(style='thin', color='888888'),
+                    right=Side(style='thin', color='888888'),
+                    top=Side(style='thin', color='888888'),
+                    bottom=Side(style='thin', color='888888')
+                )
 
-                # Add a simple bar chart for Top Products (top N quantities)
-                try:
-                    top_count = min(20, len(top_products))
-                    if top_count > 0:
-                        # We put the chart on ws3; data rows start at row 2
-                        chart2 = BarChart()
-                        chart2.type = "col"
-                        chart2.style = 12
-                        chart2.title = f"Top {top_count} Products - Quantity Sold"
-                        chart2.y_axis.title = 'Quantity'
-                        chart2.x_axis.title = 'Product'
-
-                        data_ref2 = Reference(ws3, min_col=5, min_row=1,
-                                              max_row=1 + top_count)  # Quantity column (col 5)
-                        # include header (titles_from_data=True) if header present
-                        chart2.add_data(data_ref2, titles_from_data=True)
-
-                        cats2 = Reference(ws3, min_col=3, min_row=2, max_row=1 + top_count)  # Product Name (col 3)
-                        chart2.set_categories(cats2)
-                        chart2.width = 20
-                        chart2.height = 10
-                        ws3.add_chart(chart2, "H2")
-                except Exception:
-                    pass
-
-                # Inventory sheet - per product stock value
-                ws4 = wb.create_sheet(title="Inventory")
-                ws4.append(["Product ID", "Product Name", "Code", "Stock", "Import Price", "Stock Value"])
-                products = Product.objects.all().values('id', 'name', 'code', 'stock', 'import_price')
-                for pr in products:
-                    stock = pr.get('stock') or 0
-                    ip = pr.get('import_price') or 0
-                    value = int(stock) * float(ip)
-                    ws4.append([pr.get('id'), pr.get('name'), pr.get('code'), int(stock), float(ip), value])
-
-                # Auto-width (optional)
-                for wsx in (ws, ws2, ws3, ws_rank, ws4):
+                # Apply borders and auto-width to each sheet that contains data
+                for wsx in (ws, ws2, ws3):
                     if wsx is None:
                         continue
+
+                    for row in wsx.iter_rows(min_row=1, max_row=wsx.max_row, min_col=1, max_col=wsx.max_column):
+                        for cell in row:
+                            if cell.value is not None:
+                                cell.border = thin_border
+
                     for col in range(1, (wsx.max_column or 1) + 1):
                         col_letter = get_column_letter(col)
                         try:
@@ -1069,7 +1104,6 @@ class SalesReportAdmin(admin.ModelAdmin):
                         except Exception:
                             pass
 
-                # Save to BytesIO and return response
                 stream = io.BytesIO()
                 wb.save(stream)
                 stream.seek(0)
@@ -1081,7 +1115,6 @@ class SalesReportAdmin(admin.ModelAdmin):
                 response['Content-Disposition'] = f'attachment; filename="{fname}"'
                 return response
         # --- end Excel export ---
-
         # --- end Excel export ---
 
         # JSON for template (chart)
