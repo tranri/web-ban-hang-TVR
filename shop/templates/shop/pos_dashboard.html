@@ -51,19 +51,25 @@
         </div>
         <div class="product-grid" id="product-grid">
             {% for p in products %}
-            <div class="product-card" onclick="addToCart({{ p.id }}, '{{ p.name|escapejs }}', {{ p.price }}, {{ p.stock }})">
+            <div class="product-card"
+                 {% if p.stock > 0 %}
+                onclick="addToCart({{ p.id }}, '{{ p.code|default:''|escapejs }}', '{{ p.name|escapejs }}', {{ p.price }}, {{ p.stock }})"
+                {% else %}
+                style="opacity: 0.6; cursor: not-allowed; background-color: #f8f9fa;"
+                {% endif %}>
                 <div>
                     <div class="product-img-box">
                         <img src="{% if p.image %}{{ p.image.url }}{% else %}/static/images/no-image.png{% endif %}">
                     </div>
-                    <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark">{{ p.name }}</h6>
+                    <div class="text-muted" style="font-size: 11px; font-weight: 500;">Mã: {{ p.code|default:"---" }}</div>
+                    <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark mb-1">{{ p.name }}</h6>
                 </div>
                 <div>
                     <span class="text-danger fw-bold" style="font-size: 14px;">{{ p.price|floatformat:0 }}đ</span>
                     {% if p.stock > 0 %}
                     <div class="text-dark fw-bold" style="font-size: 12px;">Tồn: {{ p.stock }}</div>
                     {% else %}
-                    <div class="fw-bold" style="font-size: 12px; color: #004080;">Hết</div>
+                    <div class="fw-bold" style="font-size: 12px; color: #FF0000;">Hết</div>
                     {% endif %}
                 </div>
             </div>
@@ -80,14 +86,15 @@
         </div>
 
         <div class="cart-items-box">
-            <table class="table table-sm mb-0">
+            <table class="table table-sm mb-0 align-middle">
                 <thead>
                 <tr>
+                    <th style="width: 85px;">Mã SP</th>
                     <th>Sản phẩm</th>
                     <th style="width: 70px;">SL</th>
                     <th class="text-end">Đơn giá</th>
                     <th class="text-end">Tiền</th>
-                    <th></th>
+                    <th style="width: 35px;"></th>
                 </tr>
                 </thead>
                 <tbody id="cart-table-body">
@@ -113,30 +120,20 @@
 </div>
 
 <script>
-    // Hàm cập nhật câu chúc theo khung giờ
     function updateGreetingByTime() {
         const now = new Date();
         const hours = now.getHours();
         const minutes = now.getMinutes();
-        const timeVal = hours * 100 + minutes; // Ví dụ: 11:30 thành 1130
+        const timeVal = hours * 100 + minutes;
 
         let greeting = "🌿 Chúc bạn một ngày bình an";
 
-        // 05:00 – 10:59 (500 đến 1059)
         if (timeVal >= 500 && timeVal <= 1059) {
             greeting = "🌿 Chúc bạn một ngày bình an";
-        }
-        // 11:00 – 13:59 (1100 đến 1359)
-        else if (timeVal >= 1100 && timeVal <= 1359) {
+        } else if (timeVal >= 1100 && timeVal <= 1359) {
             greeting = "☕ Chúc bạn buổi trưa nhẹ nhàng";
-        }
-        // 14:00 – 17:59 (1400 đến 1759)
-        else if (timeVal >= 1400 && timeVal <= 1759) {
+        } else if (timeVal >= 1400 && timeVal <= 1759) {
             greeting = "🌼 Chúc bạn một buổi chiều thuận lợi";
-        }
-        // 18:00 – 22:00 (1800 đến 2200) và các khung giờ còn lại
-        else if (timeVal >= 1800 && timeVal <= 2200) {
-            greeting = "🌙 Chúc bạn một buổi tối an yên";
         } else {
             greeting = "🌙 Chúc bạn một buổi tối an yên";
         }
@@ -147,39 +144,72 @@
         }
     }
 
-    // Chạy ngay khi tải trang
     updateGreetingByTime();
 
-    let cart = {};
+    let cart = JSON.parse(localStorage.getItem('pos_cart')) || {};
+    let warningTimeouts = {}; 
 
-    function addToCart(id, name, price, stock) {
+    renderCart();
+
+    function addToCart(id, code, name, price, stock) {
+        if (stock <= 0) {
+            alert("Sản phẩm đã hết hàng, không thể bán!");
+            return;
+        }
         if (cart[id]) {
             if (cart[id].quantity + 1 > stock) {
-                alert("Vượt quá số lượng tồn kho!");
+                triggerWarning(id, stock);
                 return;
             }
             cart[id].quantity += 1;
         } else {
-            cart[id] = { id, name, price, quantity: 1, stock };
+            cart[id] = { id, code, name, price, quantity: 1, stock, showWarning: false };
         }
-        renderCart();
+        saveAndRender();
     }
 
     function updateQty(id, qty) {
         qty = parseInt(qty);
-        if (qty <= 0) {
+        if (isNaN(qty) || qty <= 0) {
             delete cart[id];
+            if (warningTimeouts[id]) clearTimeout(warningTimeouts[id]);
         } else if (qty > cart[id].stock) {
-            alert("Vượt quá số lượng tồn kho!");
-            cart[id].quantity = cart[id].stock;
+            cart[id].quantity = cart[id].stock; 
+            triggerWarning(id, cart[id].stock);
+            return;
         } else {
             cart[id].quantity = qty;
+            cart[id].showWarning = false;
+            if (warningTimeouts[id]) clearTimeout(warningTimeouts[id]);
         }
-        renderCart();
+        saveAndRender();
+    }
+
+    function triggerWarning(id, stock) {
+        cart[id].quantity = stock;
+        cart[id].showWarning = true;
+        saveAndRender();
+
+        if (warningTimeouts[id]) {
+            clearTimeout(warningTimeouts[id]);
+        }
+
+        warningTimeouts[id] = setTimeout(() => {
+            if (cart[id]) {
+                cart[id].showWarning = false;
+                saveAndRender();
+            }
+        }, 4000);
     }
 
     function removeItem(id) {
         delete cart[id];
+        if (warningTimeouts[id]) clearTimeout(warningTimeouts[id]);
+        saveAndRender();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('pos_cart', JSON.stringify(cart));
         renderCart();
     }
 
@@ -193,10 +223,20 @@
             let subtotal = item.price * item.quantity;
             total += subtotal;
 
+            let errorMsg = item.showWarning ? `<div class="text-danger fw-bold" style="font-size: 10px; margin-top: 2px;">Vượt tồn kho!</div>` : '';
+            let inputBorderClass = item.showWarning ? 'border-danger text-danger' : '';
+
             tbody.innerHTML += `
                 <tr>
-                    <td>${item.name}</td>
-                    <td><input type="number" value="${item.quantity}" min="1" class="form-control form-control-sm" onchange="updateQty(${id}, this.value)"></td>
+                    <td><span class="text-muted fw-bold" style="font-size: 12px;">${item.code || '---'}</span></td>
+                    <td>
+                        <div class="fw-bold" style="font-size: 13px;">${item.name}</div>
+                        <div class="text-danger fw-bold" style="font-size: 11px;">Tồn: ${item.stock}</div>
+                    </td>
+                    <td>
+                        <input type="number" value="${item.quantity}" min="1" class="form-control form-control-sm ${inputBorderClass}" onchange="updateQty(${id}, this.value)">
+                        ${errorMsg}
+                    </td>
                     <td class="text-end">${item.price.toLocaleString()}đ</td>
                     <td class="text-end fw-bold">${subtotal.toLocaleString()}đ</td>
                     <td class="text-center"><button class="btn btn-sm text-danger" onclick="removeItem(${id})"><i class="fa fa-trash"></i></button></td>
@@ -230,6 +270,7 @@
             if (data.status === 'success') {
                 alert("Thanh toán thành công!");
                 cart = {};
+                localStorage.removeItem('pos_cart');
                 renderCart();
                 document.getElementById('customer-phone').value = '';
                 window.open(`/admin/shop/order/${data.order_id}/print/`, '_blank');
@@ -247,17 +288,23 @@
                 let grid = document.getElementById('product-grid');
                 grid.innerHTML = '';
                 data.products.forEach(p => {
+                    let isOutOfStock = p.stock <= 0;
+                    let pCode = p.code || '';
+                    let cardStyle = isOutOfStock ? 'style="opacity: 0.6; cursor: not-allowed; background-color: #f8f9fa;"' : '';
+                    let onclickAttr = isOutOfStock ? '' : `onclick="addToCart(${p.id}, '${pCode.replace(/'/g, "\\'")}', '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${p.stock})"`;
+
                     let stockDisplay = p.stock > 0
                         ? `<div class="text-dark fw-bold" style="font-size: 12px;">Tồn: ${p.stock}</div>`
-                        : `<div class="fw-bold" style="font-size: 12px; color: #004080;">Hết</div>`;
+                        : `<div class="fw-bold" style="font-size: 12px; color: #FF0000;">Hết</div>`;
 
                     grid.innerHTML += `
-                        <div class="product-card" onclick="addToCart(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${p.stock})">
+                        <div class="product-card" ${onclickAttr} ${cardStyle}>
                             <div>
                                 <div class="product-img-box">
                                     <img src="${p.image}">
                                 </div>
-                                <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark">${p.name}</h6>
+                                <div class="text-muted" style="font-size: 11px; font-weight: 500;">Mã: ${pCode || '---'}</div>
+                                <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark mb-1">${p.name}</h6>
                             </div>
                             <div>
                                 <span class="text-danger fw-bold" style="font-size: 14px;">${p.price.toLocaleString()}đ</span>

@@ -433,6 +433,7 @@ class OrderAdmin(admin.ModelAdmin):
                     <thead>
                         <tr>
                             <th style="width: 40px; text-align: center;">STT</th>
+                            <th style="width: 100px;">Mã SP</th>
                             <th>Tên sản phẩm</th>
                             <th style="width: 70px; text-align: center;">SL</th>
                             <th style="text-align: right;">Đơn giá</th>
@@ -450,17 +451,20 @@ class OrderAdmin(admin.ModelAdmin):
             subtotal = unit_price * item.quantity
             price_str = f"{unit_price:,.0f}".replace(",", ".") + "đ"
             subtotal_str = f"{subtotal:,.0f}".replace(",", ".") + "đ"
+
+            product_code = escape(item.product.code if item.product and item.product.code else '---')
             product_name = escape(item.product.name if item.product else 'Sản phẩm')
 
             item_rows += f"""
-                        <tr>
-                            <td style="text-align: center;">{index}</td>
-                            <td>{product_name}</td>
-                            <td style="text-align: center;">{item.quantity}</td>
-                            <td style="text-align: right;">{price_str}</td>
-                            <td style="text-align: right;">{subtotal_str}</td>
-                        </tr>
-            """
+                                <tr>
+                                    <td style="text-align: center;">{index}</td>
+                                    <td>{product_code}</td>
+                                    <td>{product_name}</td>
+                                    <td style="text-align: center;">{item.quantity}</td>
+                                    <td style="text-align: right;">{price_str}</td>
+                                    <td style="text-align: right;">{subtotal_str}</td>
+                                </tr>
+                    """
 
         html_content += item_rows
         final_price_str = f"{order.final_price:,.0f}".replace(",", ".") + "đ"
