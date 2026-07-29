@@ -37,9 +37,7 @@ class ShopConfigurationAdmin(admin.ModelAdmin):
     inlines = [BannerImageInline]
 
     def has_add_permission(self, request):
-        if ShopConfiguration.objects.exists():
-            return False
-        return True
+        return not ShopConfiguration.objects.exists()
 
 
 @admin.register(Category)
@@ -48,8 +46,7 @@ class CategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.select_related('parent')
+        return super().get_queryset(request).select_related('parent')
 
 
 @admin.register(Product)
@@ -85,33 +82,25 @@ class ProductAdmin(admin.ModelAdmin):
         }
 
     def after_tax_profit_display(self, obj):
-        """Display after-tax profit: Selling price - Purchase price - (Selling price * tax%)"""
         if obj.price and obj.import_price and obj.price > 0:
             tax_amount = obj.price * (obj.tax_rate / 100)
             profit = obj.price - obj.import_price - tax_amount
             profit_int = int(profit)
 
-            # Tính phần trăm
             percentage = (profit / obj.price) * 100
-            # Tạo chuỗi phần trăm trước để tránh lỗi định dạng trong format_html
             percentage_str = f"{percentage:.1f}%"
-
-            # Color code: green for positive, red for negative
             color = "#51cf66" if profit_int >= 0 else "#ff6b6b"
-
             profit_str = f"{profit_int:,}đ".replace(",", ".")
 
-            # Truyền chuỗi đã định dạng sẵn vào format_html
             return format_html(
                 '<span style="color: {}; font-weight: bold;">{} ({})</span>',
                 color, profit_str, percentage_str
             )
         return "-"
 
-    after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>gôp<br>sau thuế")
+    after_tax_profit_display.short_description = mark_safe("Lợi nhuận<br>gộp<br>sau thuế")
 
     def subtract_defective_button(self, obj):
-        """Display subtract button for defective products"""
         url = reverse('admin:product_subtract_defective', args=[obj.pk])
         return format_html('<a class="button" href="{}">Trừ</a>', url)
 
@@ -136,43 +125,32 @@ class ProductAdmin(admin.ModelAdmin):
     def update_data_view(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
 
-        # Check if product stock is not zero
         if product.stock != 0:
             messages.error(request,
                            f"Không thể cập nhật: Tồn kho của '{product.name}' đang là {product.stock}, phải bằng 0 mới được phép cập nhật!")
             return redirect('admin:shop_product_changelist')
 
-        # NEW VALIDATION: Check if new_stock is non-zero
         if product.new_stock is None or product.new_stock == 0:
-            messages.error(request,
-                           f"Không thể cập nhật: Số lượng mới phải khác 0!")
+            messages.error(request, "Không thể cập nhật: Số lượng mới phải khác 0!")
             return redirect('admin:shop_product_changelist')
 
-        # NEW VALIDATION: Check if new_import_price is non-zero
         if product.new_import_price is None or product.new_import_price == 0:
-            messages.error(request,
-                           f"Không thể cập nhật: Giá nhập mới phải khác 0!")
+            messages.error(request, "Không thể cập nhật: Giá nhập mới phải khác 0!")
             return redirect('admin:shop_product_changelist')
 
-        # At this point we will replace the product.import_price with new_import_price.
-        # To avoid changing historical COGS for previously sold items, backfill OrderItem.import_price
-        # for any OrderItem rows of this product that have import_price IS NULL using the current (old) import price.
         old_import_price = product.import_price
         new_import_price = product.new_import_price
 
         try:
             with transaction.atomic():
                 backfilled = 0
-                # Only attempt backfill if we have an old import price to preserve
                 if old_import_price is not None:
-                    # Only backfill order items that were sold before now (they represent old stock)
                     backfilled = OrderItem.objects.filter(
                         product=product,
                         import_price__isnull=True,
                         order__created_at__lte=timezone.now()
                     ).update(import_price=old_import_price)
 
-                # Now apply the new import price and new stock
                 product.sale_price = product.price
                 if new_import_price and new_import_price > 0:
                     product.import_price = new_import_price
@@ -180,7 +158,6 @@ class ProductAdmin(admin.ModelAdmin):
 
                 product.stock = product.new_stock if product.new_stock is not None else 0
                 product.new_stock = 0
-
                 product.save()
 
                 msg = f"Đã cập nhật thành công sản phẩm: {product.name}."
@@ -189,22 +166,17 @@ class ProductAdmin(admin.ModelAdmin):
                 messages.success(request, msg)
         except Exception as e:
             messages.error(request, f"Lỗi khi cập nhật sản phẩm: {str(e)}")
-            return redirect('admin:shop_product_changelist')
 
         return redirect('admin:shop_product_changelist')
 
     def subtract_defective_view(self, request, object_id):
-        """Handle subtracting defective quantity from inventory"""
         product = get_object_or_404(Product, pk=object_id)
-        defective_qty = product.defective_quantity if product.defective_quantity else 0
+        defective_qty = product.defective_quantity or 0
 
-        # Check if defective_quantity is greater than 0
         if defective_qty == 0:
-            messages.error(request,
-                           f"Không thể trừ hàng lỗi: Số lượng hàng lỗi của '{product.name}' phải lớn hơn 0!")
+            messages.error(request, f"Không thể trừ hàng lỗi: Số lượng hàng lỗi của '{product.name}' phải lớn hơn 0!")
             return redirect('admin:shop_product_changelist')
 
-        # Check if stock is sufficient
         if product.stock < defective_qty:
             messages.error(request,
                            f"Không thể trừ hàng lỗi: Tồn kho của '{product.name}' là {product.stock}, nhỏ hơn số lượng hàng lỗi {defective_qty}!")
@@ -212,12 +184,9 @@ class ProductAdmin(admin.ModelAdmin):
 
         try:
             with transaction.atomic():
-                # Subtract defective quantity from stock
                 product.stock -= defective_qty
-                # Reset defective_quantity to 0
                 product.defective_quantity = 0
                 product.save()
-
                 messages.success(request,
                                  f"Đã trừ thành công {defective_qty} sản phẩm lỗi của '{product.name}'. Tồn kho hiện tại: {product.stock}")
         except Exception as e:
@@ -228,8 +197,8 @@ class ProductAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
 
-        def clean_price(self):
-            price = self.cleaned_data.get("price")
+        def clean_price(self_form):
+            price = self_form.cleaned_data.get("price")
             if price is not None and price < 1000:
                 raise forms.ValidationError("Giá bán sản phẩm phải lớn hơn 1000 VNĐ!")
             return price
@@ -238,8 +207,7 @@ class ProductAdmin(admin.ModelAdmin):
         return form
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.select_related('category')
+        return super().get_queryset(request).select_related('category')
 
 
 @admin.register(DocumentPost)
@@ -297,15 +265,9 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
-        'id',
-        'full_name',
-        'phone',
-        'final_price_display',  # total after redeemed points
-        'created_at_display',
-        'order_status',
-        'points_display',
-        'print_status_display',  # Đã có trong list_display
-        'order_actions'
+        'id', 'full_name', 'phone', 'final_price_display',
+        'created_at_display', 'order_status', 'points_display',
+        'print_status_display', 'order_actions'
     ]
     list_filter = ['created_at', 'is_printed', 'full_name', 'points_awarded']
     search_fields = ['full_name', 'phone', 'id']
@@ -319,8 +281,7 @@ class OrderAdmin(admin.ModelAdmin):
         if not getattr(obj, 'created_at', None):
             return "-"
         try:
-            local_dt = timezone.localtime(obj.created_at)
-            return local_dt.strftime("%H:%M %d/%m/%Y")
+            return timezone.localtime(obj.created_at).strftime("%H:%M %d/%m/%Y")
         except Exception:
             return str(obj.created_at)
 
@@ -331,11 +292,9 @@ class OrderAdmin(admin.ModelAdmin):
 
         if time_diff < limit:
             remaining_days = (limit - time_diff).days + 1
-            status = f"Còn {remaining_days} ngày"
-            color = "#ffc107"  # Yellow
+            status, color = f"Còn {remaining_days} ngày", "#ffc107"
         else:
-            status = "Hoàn thành"
-            color = "#51cf66"  # Green
+            status, color = "Hoàn thành", "#51cf66"
 
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, status)
 
@@ -343,22 +302,18 @@ class OrderAdmin(admin.ModelAdmin):
 
     @admin.display(description="Trạng thái in")
     def print_status_display(self, obj):
-        """Hiển thị nhãn trạng thái đã in hoặc chưa in kèm thời gian in (nếu có)"""
         if getattr(obj, 'is_printed', False):
             time_str = obj.printed_at.strftime('%H:%M %d/%m/%Y') if obj.printed_at else ""
             return format_html(
                 '<span style="color: #fff; background-color: #2b8a3e; padding: 4px 8px; border-radius: 3px; font-weight: bold;" title="In lúc: {}">✓ Đã in</span>',
                 time_str
             )
-        else:
-            # Sửa thành mark_safe ở đây vì chuỗi HTML này tĩnh, không có biến truyền vào
-            return mark_safe(
-                '<span style="color: #fff; background-color: #adb5bd; padding: 4px 8px; border-radius: 3px; font-weight: bold;">Chưa in</span>'
-            )
+        return mark_safe(
+            '<span style="color: #fff; background-color: #adb5bd; padding: 4px 8px; border-radius: 3px; font-weight: bold;">Chưa in</span>'
+        )
 
     @admin.display(description="Điểm cộng")
     def points_display(self, obj):
-        """Show points of the order with status indicator"""
         points = obj.awarded_points if (obj.awarded_points and obj.awarded_points > 0) else obj.calculate_points()
         if points > 0:
             if getattr(obj, 'points_awarded', False):
@@ -366,15 +321,13 @@ class OrderAdmin(admin.ModelAdmin):
                     '<span style="color: #2b8a3e; font-weight: bold; background-color: #e8f5e9; padding: 4px 8px; border-radius: 3px;">✓ {} điểm</span>',
                     points
                 )
-            else:
-                return format_html(
-                    '<span style="color: #d97706; font-weight: bold; background-color: #fef3c7; padding: 4px 8px; border-radius: 3px;">x {} điểm</span>',
-                    points
-                )
+            return format_html(
+                '<span style="color: #d97706; font-weight: bold; background-color: #fef3c7; padding: 4px 8px; border-radius: 3px;">x {} điểm</span>',
+                points
+            )
         return "-"
 
     def order_actions(self, obj):
-        """Hiển thị các nút thao tác: In đơn hàng và Hoàn trả"""
         now = timezone.now()
         time_diff = now - obj.created_at
 
@@ -385,8 +338,7 @@ class OrderAdmin(admin.ModelAdmin):
             return_url = reverse('admin:order_return_action', args=[obj.pk])
             return_btn = f'<a class="button" href="{return_url}" style="background: #ba2121; color: white; padding: 4px 10px; border-radius: 4px; text-decoration: none;">Hoàn trả</a>'
             return format_html('{} {}', mark_safe(print_btn), mark_safe(return_btn))
-        else:
-            return format_html('{}', mark_safe(print_btn))
+        return format_html('{}', mark_safe(print_btn))
 
     order_actions.short_description = "Hành động"
 
@@ -403,7 +355,6 @@ class OrderAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def print_order_view(self, request, object_id):
-        """View xử lý giao diện trang in hóa đơn gói hàng"""
         order = get_object_or_404(Order, pk=object_id)
         if not order.is_printed:
             order.is_printed = True
@@ -412,6 +363,15 @@ class OrderAdmin(admin.ModelAdmin):
 
         config = ShopConfiguration.get_config()
         items = order.items.select_related('product').all()
+
+        # Bảo mật XSS bằng cách escape các chuỗi đầu vào từ dữ liệu người dùng
+        safe_title = escape(config.title)
+        safe_address = escape(config.address)
+        safe_phone = escape(config.phone)
+        safe_full_name = escape(order.full_name)
+        safe_order_phone = escape(order.phone)
+        safe_order_address = escape(order.address)
+        safe_note = escape(order.note or 'Không có')
 
         html_content = f"""
         <!DOCTYPE html>
@@ -448,8 +408,8 @@ class OrderAdmin(admin.ModelAdmin):
         <body>
             <div class="invoice-box">
                 <div class="header">
-                    <h2>{config.title}</h2>
-                    <p>Địa chỉ: {config.address} | Hotline: {config.phone}</p>
+                    <h2>{safe_title}</h2>
+                    <p>Địa chỉ: {safe_address} | Hotline: {safe_phone}</p>
                     <h3 style="margin-top: 10px; margin-bottom: 5px; color: #333;">PHIẾU GIAO HÀNG / HÓA ĐƠN BÁN HÀNG</h3>
                     <p>Mã đơn hàng: <b>#{order.id}</b> | Ngày đặt: {order.created_at.strftime('%H:%M %d/%m/%Y')}</p>
                 </div>
@@ -458,12 +418,12 @@ class OrderAdmin(admin.ModelAdmin):
                     <table>
                         <tr>
                             <td style="width: 50%;">
-                                <b>Khách hàng:</b> {order.full_name}<br>
-                                <b>Số điện thoại:</b> {order.phone}<br>
+                                <b>Khách hàng:</b> {safe_full_name}<br>
+                                <b>Số điện thoại:</b> {safe_order_phone}<br>
                             </td>
                             <td>
-                                <b>Địa chỉ nhận hàng:</b> {order.address}<br>
-                                <b>Ghi chú đơn:</b> <span style="color: #d9534f;">{order.note or 'Không có'}</span>
+                                <b>Địa chỉ nhận hàng:</b> {safe_order_address}<br>
+                                <b>Ghi chú đơn:</b> <span style="color: #d9534f;">{safe_note}</span>
                             </td>
                         </tr>
                     </table>
@@ -490,11 +450,12 @@ class OrderAdmin(admin.ModelAdmin):
             subtotal = unit_price * item.quantity
             price_str = f"{unit_price:,.0f}".replace(",", ".") + "đ"
             subtotal_str = f"{subtotal:,.0f}".replace(",", ".") + "đ"
+            product_name = escape(item.product.name if item.product else 'Sản phẩm')
 
             item_rows += f"""
                         <tr>
                             <td style="text-align: center;">{index}</td>
-                            <td>{item.product.name if item.product else 'Sản phẩm'}</td>
+                            <td>{product_name}</td>
                             <td style="text-align: center;">{item.quantity}</td>
                             <td style="text-align: right;">{price_str}</td>
                             <td style="text-align: right;">{subtotal_str}</td>
@@ -502,15 +463,12 @@ class OrderAdmin(admin.ModelAdmin):
             """
 
         html_content += item_rows
-
         final_price_str = f"{order.final_price:,.0f}".replace(",", ".") + "đ"
 
         html_content += f"""
                     </tbody>
                 </table>
-
                 <div style="clear: both;"></div>
-
                 <div class="totals">
                     <table>                        
                         <tr style="border-top: 2px solid #333;">
@@ -519,9 +477,7 @@ class OrderAdmin(admin.ModelAdmin):
                         </tr>
                     </table>
                 </div>
-
                 <div style="clear: both;"></div>
-
                 <div class="print-btn">
                     <button onclick="window.print();">🖨️ In Hóa Đơn Ngay</button>
                 </div>
@@ -535,10 +491,8 @@ class OrderAdmin(admin.ModelAdmin):
         order_item = get_object_or_404(OrderItem.objects.select_related('order', 'product'), pk=item_id)
         order = order_item.order
 
-        now = timezone.now()
-        time_diff = now - order.created_at
-        if time_diff >= Order.ORDER_DURATION:
-            messages.error(request, f"Không thể trả hàng: Đơn hàng '{order.id}' đã quá hạn 5 ngày.")
+        if timezone.now() - order.created_at >= Order.ORDER_DURATION:
+            messages.error(request, f"Không thể trả hàng: Đơn hàng '{order.id}' đã quá hạn.")
             return redirect(reverse('admin:shop_order_change', args=[order.pk]))
 
         try:
@@ -546,12 +500,8 @@ class OrderAdmin(admin.ModelAdmin):
         except (ValueError, TypeError):
             returned_qty = 0
 
-        if returned_qty <= 0:
-            messages.error(request, "Vui lòng nhập số lượng trả hàng lớn hơn 0!")
-            return redirect(reverse('admin:shop_order_change', args=[order.pk]))
-
-        if returned_qty > order_item.quantity:
-            messages.error(request, f"Số lượng trả hàng không được lớn hơn số lượng đặt!")
+        if returned_qty <= 0 or returned_qty > order_item.quantity:
+            messages.error(request, "Số lượng trả hàng không hợp lệ!")
             return redirect(reverse('admin:shop_order_change', args=[order.pk]))
 
         try:
@@ -601,11 +551,8 @@ class OrderAdmin(admin.ModelAdmin):
 
     def return_action_view(self, request, object_id):
         order = get_object_or_404(Order, pk=object_id)
-        now = timezone.now()
-        time_diff = now - order.created_at
-
-        if time_diff >= Order.ORDER_DURATION:
-            messages.error(request, f"Không thể hoàn trả: Đơn hàng đã quá hạn!")
+        if timezone.now() - order.created_at >= Order.ORDER_DURATION:
+            messages.error(request, "Không thể hoàn trả: Đơn hàng đã quá hạn!")
             return redirect('admin:shop_order_changelist')
 
         try:
@@ -622,11 +569,9 @@ class OrderAdmin(admin.ModelAdmin):
                     if customer:
                         if order.applied_points and order.applied_points > 0:
                             customer.points += order.applied_points
-
                         if getattr(order, 'points_awarded',
                                    False) and order.awarded_points and order.awarded_points > 0:
                             customer.points = max(0, customer.points - order.awarded_points)
-
                         customer.save(update_fields=['points'])
 
                 order.delete()
@@ -637,8 +582,9 @@ class OrderAdmin(admin.ModelAdmin):
         return redirect('admin:shop_order_changelist')
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('product')))
+        return super().get_queryset(request).prefetch_related(
+            Prefetch('items', queryset=OrderItem.objects.select_related('product'))
+        )
 
     @admin.display(description="Thanh toán")
     def final_price_display(self, obj):
@@ -652,8 +598,7 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone', 'created_at', 'customer_badge', 'points',
-                    'reset_password_button']  # Thêm nút vào danh sách
+    list_display = ['full_name', 'phone', 'created_at', 'customer_badge', 'points', 'reset_password_button']
     list_filter = ['created_at', 'phone']
     search_fields = ['full_name', 'phone']
     ordering = ['-created_at']
@@ -663,20 +608,18 @@ class CustomerAdmin(admin.ModelAdmin):
 
     def customer_badge(self, obj):
         return format_html(
-            '<span style="background-color: #e3f2fd; padding: 3px 10px; border-radius: 3px; font-size: 12px;">{}</span>',
-            f"ID: {obj.id}"
+            '<span style="background-color: #e3f2fd; padding: 3px 10px; border-radius: 3px; font-size: 12px;">ID: {}</span>',
+            obj.id
         )
 
     customer_badge.short_description = "Mã khách"
 
-    # --- THÊM TÍNH NĂNG CẤP LẠI MẬT KHẨU ---
-
     def reset_password_button(self, obj):
-        """Hiển thị nút Đổi mật khẩu nhanh trong bảng danh sách khách hàng"""
         url = reverse('admin:customer_reset_password', args=[obj.pk])
         return format_html(
             '<a class="button" style="background: #ba2121; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;" href="{}">Cấp lại MK</a>',
-            url)
+            url
+        )
 
     reset_password_button.short_description = "Đổi mật khẩu"
 
@@ -689,7 +632,6 @@ class CustomerAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def reset_password_view(self, request, object_id):
-        """Giao diện và logic nhận mật khẩu mới do nhân viên nhập cho khách"""
         customer = get_object_or_404(Customer, pk=object_id)
 
         if request.method == 'POST':
@@ -699,11 +641,8 @@ class CustomerAdmin(admin.ModelAdmin):
             else:
                 customer.set_password(new_password.strip())
                 customer.save(update_fields=['password'])
-                messages.success(request,
-                                 f"Đã cấp lại mật khẩu thành công cho khách hàng: {customer.full_name} ({customer.phone})")
+                messages.success(request, f"Đã cấp lại mật khẩu thành công cho khách hàng: {customer.full_name} ({customer.phone})")
                 return redirect('admin:shop_customer_changelist')
-
-        from django.template import Template, RequestContext
 
         template_str = """
         <!DOCTYPE html>
@@ -729,7 +668,7 @@ class CustomerAdmin(admin.ModelAdmin):
                 <form method="post">
                     {% csrf_token %}
                     <label>Nhập mật khẩu mới:</label>
-                    <input type="text" name="new_password" placeholder="Nhập mật khẩu mới cho khách..." required autofocus>
+                    <input type="text" name="new_password" placeholder="Nhập mật khẩu mới..." required autofocus>
                     <div>
                         <button type="submit">Lưu mật khẩu mới</button>
                         <a href="{% url 'admin:shop_customer_changelist' %}">Quay lại</a>
@@ -740,16 +679,11 @@ class CustomerAdmin(admin.ModelAdmin):
         </html>
         """
         t = Template(template_str)
-
-        # ĐỔI TỪ Context SANG RequestContext ĐỂ NHẬN ĐƯỢC CSRF TOKEN
-        c = RequestContext(request, {'customer': customer})
-
-        return HttpResponse(t.render(c))
+        context = RequestContext(request, {'customer': customer})
+        return HttpResponse(t.render(context))
 
 
 class SafeUserAdmin(DjangoUserAdmin):
-    """Custom UserAdmin that prevents clearing the email for superusers."""
-
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
 
@@ -757,16 +691,10 @@ class SafeUserAdmin(DjangoUserAdmin):
             def clean(self_inner):
                 cleaned = super().clean()
                 email = cleaned.get('email', '')
-
-                will_be_superuser = False
-                if obj is not None and getattr(obj, 'is_superuser', False):
-                    will_be_superuser = True
-                if not will_be_superuser:
-                    will_be_superuser = cleaned.get('is_superuser', False)
+                will_be_superuser = (obj is not None and getattr(obj, 'is_superuser', False)) or cleaned.get('is_superuser', False)
 
                 if will_be_superuser and (email is None or str(email).strip() == ""):
                     raise AdminValidationError("Cannot clear email address of a superuser.")
-
                 return cleaned
 
         return _SafeForm
@@ -781,60 +709,36 @@ admin.site.register(User, SafeUserAdmin)
 
 @admin.register(SalesReport)
 class SalesReportAdmin(admin.ModelAdmin):
-    change_list_template = "admin/shop/reports.html"  # uses the report template
+    change_list_template = "admin/shop/reports.html"
 
-    # Make it visible to staff regardless of model permissions (so it appears in the menu)
     def get_model_perms(self, request):
-        # return True for 'view' so entry shows in app index and left menu
         return {'add': False, 'change': False, 'delete': False, 'view': True}
 
     def has_view_permission(self, request, obj=None):
-        # keep default behavior but ensure staff can view
         return request.user.is_active and request.user.is_staff
 
     def changelist_view(self, request, extra_context=None):
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
-        group = request.GET.get('group', 'month')  # 'day' or 'month'
-        try:
-            if date_from:
-                dt_from = timezone.make_aware(datetime.strptime(date_from, "%Y-%m-%d"))
-            else:
-                dt_from = timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+        group = request.GET.get('group', 'month')
 
-            if date_to:
-                dt_to_date = datetime.strptime(date_to, "%Y-%m-%d")
-                dt_to = timezone.make_aware(datetime.combine(dt_to_date, datetime.max.time()))
-            else:
-                dt_to = timezone.localtime(timezone.now())
+        try:
+            dt_from = timezone.make_aware(datetime.strptime(date_from, "%Y-%m-%d")) if date_from else timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+            dt_to = timezone.make_aware(datetime.combine(datetime.strptime(date_to, "%Y-%m-%d"), datetime.max.time())) if date_to else timezone.localtime(timezone.now())
         except Exception:
             dt_from = timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
             dt_to = timezone.localtime(timezone.now())
 
-        # Expressions for calculations
         sold_qty_expr = ExpressionWrapper(F('quantity') - F('returned_quantity'), output_field=DecimalField())
-        unit_price_expr = ExpressionWrapper(
-            F('price') - F('discount_per_unit'),
-            output_field=DecimalField(max_digits=18, decimal_places=2)
-        )
+        unit_price_expr = ExpressionWrapper(F('price') - F('discount_per_unit'), output_field=DecimalField(max_digits=18, decimal_places=2))
+        cost_per_unit_expr = ExpressionWrapper(Coalesce(F('import_price'), F('product__import_price')), output_field=DecimalField(max_digits=18, decimal_places=2))
 
-        # cost per unit: prefer OrderItem.import_price (historical), fallback to product.import_price
-        cost_per_unit_expr = ExpressionWrapper(
-            Coalesce(F('import_price'), F('product__import_price')),
-            output_field=DecimalField(max_digits=18, decimal_places=2)
-        )
+        revenue_expr = ExpressionWrapper(unit_price_expr * sold_qty_expr, output_field=DecimalField(max_digits=18, decimal_places=2))
+        cogs_expr = ExpressionWrapper(cost_per_unit_expr * sold_qty_expr, output_field=DecimalField(max_digits=18, decimal_places=2))
+        profit_expr = ExpressionWrapper((unit_price_expr - cost_per_unit_expr) * sold_qty_expr, output_field=DecimalField(max_digits=18, decimal_places=2))
 
-        # revenue, cogs, profit using the cost_per_unit_expr
-        revenue_expr = ExpressionWrapper(unit_price_expr * sold_qty_expr,
-                                         output_field=DecimalField(max_digits=18, decimal_places=2))
-        cogs_expr = ExpressionWrapper(cost_per_unit_expr * sold_qty_expr,
-                                      output_field=DecimalField(max_digits=18, decimal_places=2))
-        profit_expr = ExpressionWrapper((unit_price_expr - cost_per_unit_expr) * sold_qty_expr,
-                                        output_field=DecimalField(max_digits=18, decimal_places=2))
+        items_qs = OrderItem.objects.filter(order__created_at__gte=dt_from, order__created_at__lte=dt_to).select_related('product', 'order')
 
-        items_qs = OrderItem.objects.filter(order__created_at__gte=dt_from, order__created_at__lte=dt_to)
-
-        # Totals (overall)
         agg = items_qs.aggregate(
             total_revenue=Sum(revenue_expr),
             total_cogs=Sum(cogs_expr),
@@ -844,63 +748,36 @@ class SalesReportAdmin(admin.ModelAdmin):
         total_revenue = agg.get('total_revenue') or Decimal('0')
         total_cogs = agg.get('total_cogs') or Decimal('0')
         total_profit = agg.get('total_profit') or Decimal('0')
-
-        # Orders count
         total_orders = Order.objects.filter(created_at__gte=dt_from, created_at__lte=dt_to).count()
 
-        # Inventory value
-        inv_agg = Product.objects.aggregate(inventory_value=Sum(ExpressionWrapper(F('stock') * F('import_price'),
-                                                                                  output_field=DecimalField(
-                                                                                      max_digits=18,
-                                                                                      decimal_places=2))))
+        inv_agg = Product.objects.aggregate(inventory_value=Sum(ExpressionWrapper(F('stock') * F('import_price'), output_field=DecimalField(max_digits=18, decimal_places=2))))
         inventory_value = inv_agg['inventory_value'] or Decimal('0')
 
-        # --- Period aggregation for chart ---
         period_field = TruncDay('order__created_at') if group == 'day' else TruncMonth('order__created_at')
-
         period_qs = items_qs.annotate(period=period_field).values('period').annotate(
             period_revenue=Sum(revenue_expr),
             period_cogs=Sum(cogs_expr),
             period_profit=Sum(profit_expr),
         ).order_by('period')
 
-        labels = []
-        rev_data = []
-        cogs_data = []
-        profit_data = []
-
+        labels, rev_data, cogs_data, profit_data = [], [], [], []
         for row in period_qs:
             p = row.get('period')
             if not p:
                 continue
-            if group == 'day':
-                label = p.strftime('%d/%m')
-            else:
-                label = p.strftime('%m/%Y')
-
-            labels.append(label)
+            labels.append(p.strftime('%d/%m') if group == 'day' else p.strftime('%m/%Y'))
             rev_data.append(int(row.get('period_revenue') or 0))
             cogs_data.append(int(row.get('period_cogs') or 0))
             profit_data.append(int(row.get('period_profit') or 0))
 
-        # --- Top-selling products (within the selected range) ---
-        # group by product and sum sold_qty and revenue
         top_qs = (
             items_qs
             .values('product__id', 'product__name', 'product__code')
-            .annotate(
-                qty_sold=Sum(sold_qty_expr),
-                revenue=Sum(revenue_expr),
-            )
-            .filter(
-                Q(product__id__isnull=False) &
-                (Q(qty_sold__gt=0) | Q(revenue__gt=0))
-            )
-            .order_by('-qty_sold')
-            [:30]
+            .annotate(qty_sold=Sum(sold_qty_expr), revenue=Sum(revenue_expr))
+            .filter(Q(product__id__isnull=False) & (Q(qty_sold__gt=0) | Q(revenue__gt=0)))
+            .order_by('-qty_sold')[:30]
         )
 
-        # Build top_products list for template with formatted values and admin product URL
         def fmt_money(v):
             try:
                 return f"{int(v):,}".replace(",", ".") + "đ"
@@ -914,40 +791,30 @@ class SalesReportAdmin(admin.ModelAdmin):
                 return "0"
 
         top_products = []
-        # convert top_qs to list so we can iterate multiple times safely
-        top_qs_list = list(top_qs)
-        for row in top_qs_list:
+        for row in top_qs:
             pid = row.get('product__id')
-            name = row.get('product__name') or "—"
-            code = row.get('product__code') or ""
             qty = int(row.get('qty_sold') or 0)
             rev = int(row.get('revenue') or 0)
-            product_url = reverse('admin:shop_product_change', args=[pid]) if pid else '#'
             top_products.append({
                 'id': pid,
-                'name': name,
-                'code': code,
+                'name': row.get('product__name') or "—",
+                'code': row.get('product__code') or "",
                 'qty': qty,
                 'qty_display': fmt_int(qty),
                 'revenue': rev,
                 'revenue_display': fmt_money(rev),
-                'url': product_url,
+                'url': reverse('admin:shop_product_change', args=[pid]) if pid else '#',
             })
 
-        # ISO strings for date inputs (YYYY-MM-DD)
         date_from_iso = dt_from.date().isoformat() if hasattr(dt_from, 'date') else ''
         date_to_iso = dt_to.date().isoformat() if hasattr(dt_to, 'date') else ''
 
-        # Human-readable range dd/mm/yyyy
         try:
-            df_str = dt_from.strftime('%d/%m/%Y')
-            dt_str = dt_to.strftime('%d/%m/%Y')
+            df_str, dt_str = dt_from.strftime('%d/%m/%Y'), dt_to.strftime('%d/%m/%Y')
             date_range_display = df_str if df_str == dt_str else f"{df_str} — {dt_str}"
         except Exception:
             date_range_display = ''
 
-        # --- Excel export (replace existing export block with this) ---
-        # --- Excel export ---
         export = request.GET.get('export')
         if export in ('xlsx', 'excel'):
             try:
@@ -955,18 +822,16 @@ class SalesReportAdmin(admin.ModelAdmin):
                 from openpyxl.utils import get_column_letter
                 from openpyxl.chart import BarChart, Reference
                 from openpyxl.styles import Border, Side
+                from openpyxl.chart.label import DataLabelList
             except Exception:
                 messages.error(request, "openpyxl không được cài đặt; không thể xuất Excel.")
             else:
                 wb = Workbook()
-
-                # 1. Summary sheet
                 ws = wb.active
                 ws.title = "Bảng Tóm Tắt"
                 ws.append(["Báo Cáo Tài Chính"])
                 ws.append([])
                 ws.append(["Khoảng thời gian", date_range_display or ""])
-
                 ws.append(["Tổng Doanh thu", float(total_revenue)])
                 ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append(["Tổng Giá vốn", float(total_cogs)])
@@ -977,176 +842,95 @@ class SalesReportAdmin(admin.ModelAdmin):
                 ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
                 ws.append(["Tổng Giá Tồn Kho", float(inventory_value)])
                 ws.cell(row=ws.max_row, column=2).number_format = '#,##0'
-                ws.append([])
 
-                # 2. Period sheet (chart numbers & layout)
                 ws2 = wb.create_sheet(title="Biểu Đồ Doanh Thu")
-                ws2.append(
-                    ["Thời Gian", "Doanh Thu", "Giá Vốn", "Lợi Nhuận", "Tỷ Lệ Giá Vốn (%)", "Bin Lợi Nhuận (%)"])
+                ws2.append(["Thời Gian", "Doanh Thu", "Giá Vốn", "Lợi Nhuận", "Tỷ Lệ Giá Vốn (%)", "Bin Lợi Nhuận (%)"])
 
                 for i, label in enumerate(labels):
-                    label_str = label.strftime('%d/%m/%Y') if hasattr(label, 'strftime') else str(label)
                     rev = rev_data[i] if i < len(rev_data) else 0
                     cogs = cogs_data[i] if i < len(cogs_data) else 0
                     prof = profit_data[i] if i < len(profit_data) else 0
                     cogs_pct = round((cogs / rev) * 100, 2) if rev else 0
                     prof_pct = round((prof / rev) * 100, 2) if rev else 0
 
-                    ws2.append([label_str, rev, cogs, prof, cogs_pct, prof_pct])
+                    ws2.append([str(label), rev, cogs, prof, cogs_pct, prof_pct])
                     row_idx = ws2.max_row
-                    # Định dạng dấu phân cách hàng nghìn cho các cột số liệu
-                    ws2.cell(row=row_idx, column=2).number_format = '#,##0'
-                    ws2.cell(row=row_idx, column=3).number_format = '#,##0'
-                    ws2.cell(row=row_idx, column=4).number_format = '#,##0'
-                    ws2.cell(row=row_idx, column=5).number_format = '0.00'
-                    ws2.cell(row=row_idx, column=6).number_format = '0.00'
+                    for col_num in range(2, 5):
+                        ws2.cell(row=row_idx, column=col_num).number_format = '#,##0'
+                    for col_num in range(5, 7):
+                        ws2.cell(row=row_idx, column=col_num).number_format = '0.00'
 
-                # Add bar chart for Period
                 try:
                     if len(labels) >= 1:
-                        from openpyxl.chart.label import DataLabelList
-
                         chart = BarChart()
-                        chart.type = "col"
-                        chart.style = 10
+                        chart.type, chart.style = "col", 10
                         chart.title = "Doanh thu - Giá vốn - Lợi nhuận"
-                        chart.y_axis.title = 'VNĐ'
-                        chart.x_axis.title = 'Thời gian'
+                        chart.y_axis.title, chart.x_axis.title = 'VNĐ', 'Thời gian'
 
                         data_ref = Reference(ws2, min_col=2, min_row=1, max_col=4, max_row=1 + len(labels))
                         chart.add_data(data_ref, titles_from_data=True)
-
-                        cats = Reference(ws2, min_col=1, min_row=2, max_row=1 + len(labels))
-                        chart.set_categories(cats)
+                        chart.set_categories(Reference(ws2, min_col=1, min_row=2, max_row=1 + len(labels)))
 
                         chart.dataLabels = DataLabelList()
                         chart.dataLabels.showVal = True
                         chart.dataLabels.showSerName = False
                         chart.dataLabels.showCatName = False
+                        chart.width, chart.height = 24, 12
 
-                        chart.width = 24
-                        chart.height = 12
-
-                        # Thay đổi màu sắc biểu đồ phù hợp với web (Doanh thu: Xanh dương, Giá vốn: Đỏ, Lợi nhuận: Xanh lá)
                         web_colors = ["3B82F6", "EF4444", "10B981"]
                         for idx, series in enumerate(chart.series):
                             if idx < len(web_colors):
                                 series.graphicalProperties.solidFill = web_colors[idx]
 
                         ws2.add_chart(chart, "H2")
-
-                        # Điều chỉnh vị trí đặt bảng bên dưới biểu đồ dựa trên kích thước (chiều cao) thực tế của biểu đồ
-                        chart_start_row = 2  # Biểu đồ bắt đầu từ dòng 2 (H2)
-                        chart_height_in_rows = int(
-                            chart.height * 2)  # Quy đổi chiều cao cm sang số dòng Excel (~2 dòng/cm)
-                        start_row = chart_start_row + chart_height_in_rows + 2  # Thêm khoảng đệm 2 dòng trống
-
-                        header_row = start_row
-                        ws2.cell(row=header_row, column=8, value="Thời Gian")
-                        ws2.cell(row=header_row, column=9, value="Doanh Thu")
-                        ws2.cell(row=header_row, column=10, value="Giá Vốn")
-                        ws2.cell(row=header_row, column=11, value="Lợi Nhuận")
-
-                        for i, label in enumerate(labels):
-                            row_idx = header_row + 1 + i
-                            label_str = label.strftime('%d/%m/%Y') if hasattr(label, 'strftime') else str(label)
-                            rev = rev_data[i] if i < len(rev_data) else 0
-                            cogs = cogs_data[i] if i < len(cogs_data) else 0
-                            prof = profit_data[i] if i < len(profit_data) else 0
-
-                            ws2.cell(row=row_idx, column=8, value=label_str)
-
-                            r_cell = ws2.cell(row=row_idx, column=9, value=rev)
-                            r_cell.number_format = '#,##0'
-
-                            c_cell = ws2.cell(row=row_idx, column=10, value=cogs)
-                            c_cell.number_format = '#,##0'
-
-                            p_cell = ws2.cell(row=row_idx, column=11, value=prof)
-                            p_cell.number_format = '#,##0'
-
                 except Exception:
                     pass
 
-                # 3. Top products sheet
                 ws3 = wb.create_sheet(title="Sản Phẩm Bán Chạy")
                 ws3.append(["Thứ hạng", "Tên Sản Phẩm", "Số Lượng Bán", "Doanh Thu"])
                 for idx, p in enumerate(top_products, start=1):
-                    ws3.append([idx, p.get('name') or "", int(p.get('qty') or 0),
-                                int(p.get('revenue') or 0)])
+                    ws3.append([idx, p.get('name') or "", int(p.get('qty') or 0), int(p.get('revenue') or 0)])
                     row_idx = ws3.max_row
                     ws3.cell(row=row_idx, column=1).number_format = '#,##0'
                     ws3.cell(row=row_idx, column=3).number_format = '#,##0'
                     ws3.cell(row=row_idx, column=4).number_format = '#,##0'
 
-                # Thin border style for all data cells
-                thin_border = Border(
-                    left=Side(style='thin', color='888888'),
-                    right=Side(style='thin', color='888888'),
-                    top=Side(style='thin', color='888888'),
-                    bottom=Side(style='thin', color='888888')
-                )
-
-                # Apply borders and auto-width to each sheet that contains data
+                thin_border = Border(left=Side(style='thin', color='888888'), right=Side(style='thin', color='888888'), top=Side(style='thin', color='888888'), bottom=Side(style='thin', color='888888'))
                 for wsx in (ws, ws2, ws3):
-                    if wsx is None:
-                        continue
-
-                    for row in wsx.iter_rows(min_row=1, max_row=wsx.max_row, min_col=1, max_col=wsx.max_column):
-                        for cell in row:
-                            if cell.value is not None:
-                                cell.border = thin_border
-
-                    for col in range(1, (wsx.max_column or 1) + 1):
-                        col_letter = get_column_letter(col)
-                        try:
-                            wsx.column_dimensions[col_letter].width = 18
-                        except Exception:
-                            pass
+                    if wsx:
+                        for row in wsx.iter_rows(min_row=1, max_row=wsx.max_row, min_col=1, max_col=wsx.max_column):
+                            for cell in row:
+                                if cell.value is not None:
+                                    cell.border = thin_border
+                        for col in range(1, (wsx.max_column or 1) + 1):
+                            try:
+                                wsx.column_dimensions[get_column_letter(col)].width = 18
+                            except Exception:
+                                pass
 
                 stream = io.BytesIO()
                 wb.save(stream)
                 stream.seek(0)
-                fname = f"financial_report_{group}_{dt_from.date().isoformat()}_{dt_to.date().isoformat()}.xlsx"
-                response = HttpResponse(
-                    stream.getvalue(),
-                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                fname = f"financial_report_{group}_{date_from_iso}_{date_to_iso}.xlsx"
+                response = HttpResponse(stream.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 response['Content-Disposition'] = f'attachment; filename="{fname}"'
                 return response
-        # --- end Excel export ---
-        # --- end Excel export ---
-
-        # JSON for template (chart)
-        chart_labels_json = json.dumps(labels)
-        chart_revenue_json = json.dumps(rev_data)
-        chart_cogs_json = json.dumps(cogs_data)
-        chart_profit_json = json.dumps(profit_data)
-
-        total_revenue_display = fmt_money(total_revenue)
-        total_cogs_display = fmt_money(total_cogs)
-        total_profit_display = fmt_money(total_profit)
-        inventory_value_display = fmt_money(inventory_value)
-        total_orders_display = fmt_int(total_orders)
 
         context = {
             'title': 'Báo Cáo Tài Chính',
-            'total_revenue_display': total_revenue_display,
-            'total_cogs_display': total_cogs_display,
-            'total_profit_display': total_profit_display,
-            'inventory_value_display': inventory_value_display,
-            'total_orders_display': total_orders_display,
+            'total_revenue_display': fmt_money(total_revenue),
+            'total_cogs_display': fmt_money(total_cogs),
+            'total_profit_display': fmt_money(total_profit),
+            'inventory_value_display': fmt_money(inventory_value),
+            'total_orders_display': fmt_int(total_orders),
             'date_from': date_from_iso,
             'date_to': date_to_iso,
             'date_range_display': date_range_display,
-            # chart context
-            'chart_labels_json': chart_labels_json,
-            'chart_revenue_json': chart_revenue_json,
-            'chart_cogs_json': chart_cogs_json,
-            'chart_profit_json': chart_profit_json,
+            'chart_labels_json': json.dumps(labels),
+            'chart_revenue_json': json.dumps(rev_data),
+            'chart_cogs_json': json.dumps(cogs_data),
+            'chart_profit_json': json.dumps(profit_data),
             'chart_group': group,
-            # top products
             'top_products': top_products,
         }
-
         return render(request, self.change_list_template, context)
