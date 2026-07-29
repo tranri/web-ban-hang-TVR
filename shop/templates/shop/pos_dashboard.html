@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Hệ thống Thu Ngân (POS) - {{ config.title }}</title>
+    <!-- Import Google Font Roboto -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+        }
+        .pos-container { display: flex; height: 100vh; padding: 10px; gap: 10px; }
+        .product-section { flex: 7; display: flex; flex-direction: column; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .cart-section { flex: 5; display: flex; flex-direction: column; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .product-grid { overflow-y: auto; max-height: calc(100vh - 140px); display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; align-items: stretch; }
+        .product-card { border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; cursor: pointer; text-align: center; transition: 0.2s; display: flex; flex-direction: column; justify-content: space-between; height: 100%; }
+        .product-card:hover { border-color: #0d6efd; background-color: #f1f8ff; }
+        .product-img-box { height: 80px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+        .product-img-box img { max-height: 80px; max-width: 100%; object-fit: contain; }
+        .cart-items-box { flex-grow: 1; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="pos-container">
+    <!-- TRÁI: TÌM KIẾM VÀ CHỌN SẢN PHẨM -->
+    <div class="product-section">
+        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+            <div class="d-flex align-items-center">
+                {% if config.logo %}
+                <img src="{{ config.logo.url }}" alt="Logo cửa hàng" style="height: 40px; width: 40px; object-fit: contain;" class="me-2 rounded">
+                {% endif %}
+                <h5 class="mb-0 fw-bold text-danger">{{ config.title }}</h5>
+            </div>
+
+            <div>
+                <span id="greeting-text" style="color: #43A047; font-size: 14px; font-weight: 500; letter-spacing: 0.3px;">🌿 Chúc bạn một ngày bình an</span>
+            </div>
+
+            <span class="badge bg-success">Nhân viên: {{ request.user.username }}</span>
+        </div>
+
+        <div class="input-group mb-3">
+            <input type="text" id="search-input" class="form-control" placeholder="Quét mã vạch hoặc nhập tên sản phẩm...">
+            <button class="btn btn-outline-primary" type="button"><i class="fa fa-search"></i></button>
+        </div>
+        <div class="product-grid" id="product-grid">
+            {% for p in products %}
+            <div class="product-card" onclick="addToCart({{ p.id }}, '{{ p.name|escapejs }}', {{ p.price }}, {{ p.stock }})">
+                <div>
+                    <div class="product-img-box">
+                        <img src="{% if p.image %}{{ p.image.url }}{% else %}/static/images/no-image.png{% endif %}">
+                    </div>
+                    <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark">{{ p.name }}</h6>
+                </div>
+                <div>
+                    <span class="text-danger fw-bold" style="font-size: 14px;">{{ p.price|floatformat:0 }}đ</span>
+                    {% if p.stock > 0 %}
+                    <div class="text-dark fw-bold" style="font-size: 12px;">Tồn: {{ p.stock }}</div>
+                    {% else %}
+                    <div class="fw-bold" style="font-size: 12px; color: #004080;">Hết</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- PHẢI: GIỎ HÀNG VÀ THANH TOÁN -->
+    <div class="cart-section">
+        <h5 class="mb-3"><i class="fa fa-shopping-cart"></i> Hóa đơn hiện tại</h5>
+
+        <div class="mb-2">
+            <input type="text" id="customer-phone" class="form-control form-control-sm" placeholder="Số điện thoại khách hàng...">
+        </div>
+
+        <div class="cart-items-box">
+            <table class="table table-sm mb-0">
+                <thead>
+                <tr>
+                    <th>Sản phẩm</th>
+                    <th style="width: 70px;">SL</th>
+                    <th class="text-end">Đơn giá</th>
+                    <th class="text-end">Tiền</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="cart-table-body">
+                <!-- Dữ liệu giỏ hàng thêm vào bằng JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="payment-box bg-light p-3 rounded">
+            <div class="d-flex justify-content-between mb-2">
+                <span>Tổng tiền hàng:</span>
+                <strong id="lbl-total">0 đ</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-3">
+                <span>Khách thanh toán:</span>
+                <h4 class="text-danger fw-bold m-0" id="lbl-final-total">0 đ</h4>
+            </div>
+            <button class="btn btn-success w-100 py-2 fw-bold" onclick="processCheckout()">
+                <i class="fa fa-print"></i> THANH TOÁN & IN HÓA ĐƠN
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Hàm cập nhật câu chúc theo khung giờ
+    function updateGreetingByTime() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const timeVal = hours * 100 + minutes; // Ví dụ: 11:30 thành 1130
+
+        let greeting = "🌿 Chúc bạn một ngày bình an";
+
+        // 05:00 – 10:59 (500 đến 1059)
+        if (timeVal >= 500 && timeVal <= 1059) {
+            greeting = "🌿 Chúc bạn một ngày bình an";
+        }
+        // 11:00 – 13:59 (1100 đến 1359)
+        else if (timeVal >= 1100 && timeVal <= 1359) {
+            greeting = "☕ Chúc bạn buổi trưa nhẹ nhàng";
+        }
+        // 14:00 – 17:59 (1400 đến 1759)
+        else if (timeVal >= 1400 && timeVal <= 1759) {
+            greeting = "🌼 Chúc bạn một buổi chiều thuận lợi";
+        }
+        // 18:00 – 22:00 (1800 đến 2200) và các khung giờ còn lại
+        else if (timeVal >= 1800 && timeVal <= 2200) {
+            greeting = "🌙 Chúc bạn một buổi tối an yên";
+        } else {
+            greeting = "🌙 Chúc bạn một buổi tối an yên";
+        }
+
+        const greetingElement = document.getElementById('greeting-text');
+        if (greetingElement) {
+            greetingElement.innerText = greeting;
+        }
+    }
+
+    // Chạy ngay khi tải trang
+    updateGreetingByTime();
+
+    let cart = {};
+
+    function addToCart(id, name, price, stock) {
+        if (cart[id]) {
+            if (cart[id].quantity + 1 > stock) {
+                alert("Vượt quá số lượng tồn kho!");
+                return;
+            }
+            cart[id].quantity += 1;
+        } else {
+            cart[id] = { id, name, price, quantity: 1, stock };
+        }
+        renderCart();
+    }
+
+    function updateQty(id, qty) {
+        qty = parseInt(qty);
+        if (qty <= 0) {
+            delete cart[id];
+        } else if (qty > cart[id].stock) {
+            alert("Vượt quá số lượng tồn kho!");
+            cart[id].quantity = cart[id].stock;
+        } else {
+            cart[id].quantity = qty;
+        }
+        renderCart();
+    }
+
+    function removeItem(id) {
+        delete cart[id];
+        renderCart();
+    }
+
+    function renderCart() {
+        let tbody = document.getElementById('cart-table-body');
+        tbody.innerHTML = '';
+        let total = 0;
+
+        for (let id in cart) {
+            let item = cart[id];
+            let subtotal = item.price * item.quantity;
+            total += subtotal;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td><input type="number" value="${item.quantity}" min="1" class="form-control form-control-sm" onchange="updateQty(${id}, this.value)"></td>
+                    <td class="text-end">${item.price.toLocaleString()}đ</td>
+                    <td class="text-end fw-bold">${subtotal.toLocaleString()}đ</td>
+                    <td class="text-center"><button class="btn btn-sm text-danger" onclick="removeItem(${id})"><i class="fa fa-trash"></i></button></td>
+                </tr>
+            `;
+        }
+
+        document.getElementById('lbl-total').innerText = total.toLocaleString() + ' đ';
+        document.getElementById('lbl-final-total').innerText = total.toLocaleString() + ' đ';
+    }
+
+    function processCheckout() {
+        let itemsArr = Object.values(cart).map(i => ({ product_id: i.id, quantity: i.quantity }));
+        if (itemsArr.length === 0) {
+            alert("Chưa có sản phẩm trong hóa đơn!");
+            return;
+        }
+
+        let phone = document.getElementById('customer-phone').value;
+
+        fetch("{% url 'shop:pos_checkout' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ items: itemsArr, phone: phone })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert("Thanh toán thành công!");
+                cart = {};
+                renderCart();
+                document.getElementById('customer-phone').value = '';
+                window.open(`/admin/shop/order/${data.order_id}/print/`, '_blank');
+            } else {
+                alert("Lỗi: " + data.message);
+            }
+        });
+    }
+
+    document.getElementById('search-input').addEventListener('input', function() {
+        let query = this.value.trim();
+        fetch(`{% url 'shop:pos_search_product' %}?q=` + encodeURIComponent(query))
+            .then(res => res.json())
+            .then(data => {
+                let grid = document.getElementById('product-grid');
+                grid.innerHTML = '';
+                data.products.forEach(p => {
+                    let stockDisplay = p.stock > 0
+                        ? `<div class="text-dark fw-bold" style="font-size: 12px;">Tồn: ${p.stock}</div>`
+                        : `<div class="fw-bold" style="font-size: 12px; color: #004080;">Hết</div>`;
+
+                    grid.innerHTML += `
+                        <div class="product-card" onclick="addToCart(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${p.stock})">
+                            <div>
+                                <div class="product-img-box">
+                                    <img src="${p.image}">
+                                </div>
+                                <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark">${p.name}</h6>
+                            </div>
+                            <div>
+                                <span class="text-danger fw-bold" style="font-size: 14px;">${p.price.toLocaleString()}đ</span>
+                                ${stockDisplay}
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+    });
+</script>
+</body>
+</html>

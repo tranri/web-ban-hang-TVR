@@ -25,4 +25,7 @@ urlpatterns = [
     path('dang-ky/', views.dang_ky, name='dang_ky'),
     path('dang-xuat/', views.dang_xuat, name='dang_xuat'),
     path('tai-khoan/', views.tai_khoan, name='tai_khoan'),
+    path('pos/', views.pos_dashboard, name='pos_dashboard'),
+    path('pos/search/', views.pos_search_product, name='pos_search_product'),
+    path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
 ]

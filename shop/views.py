@@ -1,10 +1,10 @@
 import logging
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from .models import Category, Product, ShopConfiguration, DocumentPost, Order, OrderItem, Customer
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.hashers import make_password
@@ -22,8 +22,145 @@ from django.contrib.messages import get_messages
 from django.contrib import messages as django_messages
 from django.middleware.csrf import get_token
 from decimal import ROUND_HALF_UP, Decimal
+from django.contrib.admin.views.decorators import staff_member_required
+import json
 
 logger = logging.getLogger(__name__)
+
+
+@staff_member_required(login_url='/admin/login/')
+def pos_dashboard(request):
+    config = ShopConfiguration.get_config()
+    products = Product.objects.select_related('category')
+    categories = Category.objects.all()
+
+    context = {
+        'config': config,
+        'products': products,
+        'categories': categories,
+    }
+    return render(request, 'shop/pos_dashboard.html', context)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def pos_search_product(request):
+    """API tìm kiếm sản phẩm bằng mã vạch hoặc tên cho POS"""
+    query = request.GET.get('q', '').strip()
+    products = Product.objects.filter(
+        Q(name__icontains=query) | Q(code__iexact=query)
+    )[:20]
+
+    data = []
+    for p in products:
+        data.append({
+            'id': p.id,
+            'name': p.name,
+            'code': p.code or '',
+            'price': float(p.price),
+            'stock': p.stock,
+            'image': p.image.url if p.image else '/static/images/no-image.png'
+        })
+    return JsonResponse({'products': data})
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def pos_checkout(request):
+    """Xử lý tính tiền, tạo đơn hàng, trừ kho và trả về dữ liệu in hóa đơn"""
+    try:
+        data = json.loads(request.body)
+        items = data.get('items', [])  # [{'product_id': 1, 'quantity': 2}, ...]
+        customer_phone = data.get('phone', '').strip()
+        customer_name = data.get('full_name', 'Khách lẻ tại quầy').strip()
+        customer_address = data.get('address', 'Mua trực tiếp tại cửa hàng').strip()
+        applied_points = int(data.get('applied_points', 0))
+
+        if not items:
+            return JsonResponse({'status': 'error', 'message': 'Giỏ hàng trống!'}, status=400)
+
+        with transaction.atomic():
+            total_price = Decimal(0)
+            order_items_data = []
+
+            for item in items:
+                product = Product.objects.select_for_update().get(id=int(item['product_id']))
+                qty = int(item['quantity'])
+
+                if product.stock < qty:
+                    return JsonResponse({'status': 'error', 'message': f'Sản phẩm {product.name} không đủ tồn kho (Còn: {product.stock})'}, status=400)
+
+                item_total = product.price * qty
+                total_price += item_total
+
+                order_items_data.append({
+                    'product': product,
+                    'quantity': qty,
+                    'price': product.price,
+                    'import_price': product.import_price,
+                    'item_total': item_total
+                })
+
+            # Xử lý khách hàng và điểm tích lũy
+            customer = None
+            if customer_phone:
+                customer, _ = Customer.objects.get_or_create(
+                    phone=customer_phone,
+                    defaults={'full_name': customer_name, 'address': customer_address, 'password': ''}
+                )
+                if applied_points > 0:
+                    if customer.points >= applied_points:
+                        customer.points -= applied_points
+                        customer.save(update_fields=['points'])
+                    else:
+                        return JsonResponse({'status': 'error', 'message': 'Khách hàng không đủ điểm tích lũy!'}, status=400)
+
+            final_price = max(Decimal(0), total_price - Decimal(applied_points))
+
+            # Tạo đơn hàng
+            order = Order.objects.create(
+                customer=customer,
+                full_name=customer_name,
+                phone=customer_phone or '0000000000',
+                address=customer_address,
+                total_price=total_price,
+                applied_points=applied_points,
+                final_price=final_price,
+                is_printed=True,
+                printed_at=timezone.now()
+            )
+
+            # Tạo chi tiết đơn hàng và trừ tồn kho
+            for it in order_items_data:
+                product = it['product']
+                product.stock -= it['quantity']
+                product.save()
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=it['quantity'],
+                    price=it['price'],
+                    import_price=it['import_price']
+                )
+
+            # Cộng điểm thưởng cho đơn mới (1%)
+            awarded = order.calculate_points()
+            order.awarded_points = awarded
+            order.save(update_fields=['awarded_points'])
+
+            if customer:
+                customer.points += awarded
+                customer.save(update_fields=['points'])
+
+        return JsonResponse({
+            'status': 'success',
+            'order_id': order.id,
+            'message': 'Thanh toán thành công!'
+        })
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
 def get_shop_config():
