@@ -61,7 +61,7 @@
                     <div class="product-img-box">
                         <img src="{% if p.image %}{{ p.image.url }}{% else %}/static/images/no-image.png{% endif %}">
                     </div>
-                    <div class="text-muted" style="font-size: 11px; font-weight: 500;">Mã: {{ p.code|default:"---" }}</div>
+                    
                     <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark mb-1">{{ p.name }}</h6>
                 </div>
                 <div>
@@ -83,6 +83,7 @@
 
         <div class="mb-2">
             <input type="text" id="customer-phone" class="form-control form-control-sm" placeholder="Số điện thoại khách hàng...">
+            <div id="phone-error-msg" class="text-danger fw-bold" style="font-size: 11px; margin-top: 2px; display: none;">Vui lòng nhập đúng số điện thoại hợp lệ!</div>
         </div>
 
         <div class="cart-items-box">
@@ -228,13 +229,13 @@
 
             tbody.innerHTML += `
                 <tr>
-                    <td><span class="text-muted fw-bold" style="font-size: 12px;">${item.code || '---'}</span></td>
+                    <td><span class="text-muted fw-bold" style="font-size: 15px;">${item.code || '---'}</span></td>
                     <td>
-                        <div class="fw-bold" style="font-size: 13px;">${item.name}</div>
-                        <div class="text-danger fw-bold" style="font-size: 11px;">Tồn: ${item.stock}</div>
+                        <div class="fw-bold" style="font-size: 14px;">${item.name}</div>
+                        <div class="text-danger fw-bold" style="font-size: 12px;">Tồn: ${item.stock}</div>
                     </td>
                     <td>
-                        <input type="number" value="${item.quantity}" min="1" class="form-control form-control-sm ${inputBorderClass}" onchange="updateQty(${id}, this.value)">
+                        <input type="number" value="${item.quantity}" min="1" class="fw-bold form-control form-control-sm ${inputBorderClass}" style="font-size: 15px;" onchange="updateQty(${id}, this.value)">
                         ${errorMsg}
                     </td>
                     <td class="text-end">${item.price.toLocaleString()}đ</td>
@@ -255,7 +256,28 @@
             return;
         }
 
-        let phone = document.getElementById('customer-phone').value;
+        let phoneInput = document.getElementById('customer-phone');
+        let phoneError = document.getElementById('phone-error-msg');
+        let phone = phoneInput.value.trim();
+
+        // Biểu thức chính quy (Regex) kiểm tra số điện thoại chuẩn Việt Nam (10 chữ số bắt đầu bằng 03, 05, 07, 08, 09)
+        let phoneRegex = /^(03|05|07|08|09|01[2|6|8|9])+([0-9]{8})\b/;
+
+        // Kiểm tra nếu chưa nhập hoặc số điện thoại không đúng định dạng
+        if (!phone || !phoneRegex.test(phone)) {
+            phoneInput.classList.add('border-danger'); // Thêm viền đỏ cho ô input
+            if (phoneError) {
+                phoneError.innerText = !phone ? "Vui lòng nhập số điện thoại khách hàng!" : "Số điện thoại không hợp lệ (Phải là SĐT Việt Nam đúng định dạng)!";
+                phoneError.style.display = 'block'; // Hiển thị thông báo dưới ô nhập
+            }
+            phoneInput.focus();
+            return;
+        } else {
+            phoneInput.classList.remove('border-danger');
+            if (phoneError) {
+                phoneError.style.display = 'none';
+            }
+        }
 
         fetch("{% url 'shop:pos_checkout' %}", {
             method: 'POST',
@@ -279,6 +301,15 @@
             }
         });
     }
+
+    // Tự động ẩn thông báo lỗi và viền đỏ khi người dùng bắt đầu nhập số điện thoại
+    document.getElementById('customer-phone').addEventListener('input', function() {
+        this.classList.remove('border-danger');
+        let phoneError = document.getElementById('phone-error-msg');
+        if (phoneError) {
+            phoneError.style.display = 'none';
+        }
+    });
 
     document.getElementById('search-input').addEventListener('input', function() {
         let query = this.value.trim();

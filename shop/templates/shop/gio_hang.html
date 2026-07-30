@@ -135,6 +135,7 @@
 
 <script>
     // 1. HÀM XỬ LÝ NÚT + / -
+    // 1. HÀM XỬ LÝ NÚT + / -
     function thayDoiSoLuongPage(pId, change, stockLimit) {
         let inp = document.getElementById(`qty-input-${pId}`);
         let msgEl = document.getElementById(`page-msg-${pId}`);
@@ -145,31 +146,52 @@
 
         if (newVal < 1) return;
 
-        // Xử lý khi nhấn "+" vượt quá tồn kho
+        // KIỂM TRA CHẶN NGAY TRÊN GIAO DIỆN KHI VƯỢT TỒN KHO
         if (change > 0 && stockLimit && newVal > stockLimit) {
             if (msgEl) {
-                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " cái.";
+                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " sản phẩm.";
                 msgEl.classList.remove('d-none');
+                msgEl.style.display = 'block';
             }
-            return; // Dừng lại, không cho tăng tiếp
+            return; // Chặn không cho tăng tiếp tục
         }
 
-        // Nếu hợp lệ: Cập nhật giá trị và ẨN thông báo
         if (msgEl) {
             msgEl.classList.add('d-none');
+            msgEl.style.display = 'none';
         }
         inp.value = newVal;
 
-        // Cập nhật logic phụ
         let inpMini = document.getElementById(`mini-qty-${pId}`);
         if (inpMini) {
             thayDoiSoLuongGlobal(pId, change, stockLimit);
         } else {
             capNhatGiaoDienNộiBộTrang(pId, newVal);
-            let fd = new FormData();
-            fd.append('quantity', newVal);
-            fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-            fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
+            
+            fetch(`/update-cart/${pId}/`, { 
+                method: 'POST', 
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ quantity: newVal })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    if (msgEl) {
+                        msgEl.innerText = data.message;
+                        msgEl.classList.remove('d-none');
+                        msgEl.style.display = 'block';
+                    }
+                    setTimeout(() => { location.reload(); }, 1500);
+                } else if (data.status === 'success') {
+                    if (data.cart_total_price && document.getElementById('cart-grand-total')) {
+                        document.getElementById('cart-grand-total').innerText = fmtMoney(data.cart_total_price);
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
         }
     }
 
@@ -184,7 +206,6 @@
 
         if (val < 1) { inp.value = 1; val = 1; }
 
-        // Xử lý khi nhập từ bàn phím vượt quá tồn kho
         if (stockLimit && val > stockLimit) {
             inp.value = stockLimit;
             val = stockLimit;
@@ -193,11 +214,9 @@
                 msgEl.classList.remove('d-none');
             }
         } else {
-            // Nếu trong phạm vi cho phép, ẩn thông báo
             if (msgEl) msgEl.classList.add('d-none');
         }
 
-        // Đồng bộ backend
         let inpMini = document.getElementById(`mini-qty-${pId}`);
         if (inpMini) {
             inpMini.value = val;
@@ -206,10 +225,30 @@
             guiCapNhatGioHangBackend(pId, val, msgMini);
         } else {
             capNhatGiaoDienNộiBộTrang(pId, val);
-            let fd = new FormData();
-            fd.append('quantity', val);
-            fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-            fetch(`/update-cart/${pId}/`, { method: 'POST', body: fd });
+            
+            fetch(`/update-cart/${pId}/`, { 
+                method: 'POST', 
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ quantity: val })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    if (msgEl) {
+                        msgEl.innerText = data.message;
+                        msgEl.classList.remove('d-none');
+                    }
+                    setTimeout(() => { location.reload(); }, 1500);
+                } else if (data.status === 'success') {
+                    if (data.cart_total_price && document.getElementById('cart-grand-total')) {
+                        document.getElementById('cart-grand-total').innerText = fmtMoney(data.cart_total_price);
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
         }
     }
 
@@ -235,7 +274,6 @@
         document.getElementById('cart-grand-total').innerText = fmtMoney(total);
     }
 
-    // Kiểm tra trạng thái ban đầu khi tải trang
     document.addEventListener("DOMContentLoaded", function() {
         {% for item in cart_items %}
         {
