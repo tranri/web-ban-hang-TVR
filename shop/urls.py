@@ -29,4 +29,5 @@ urlpatterns = [
     path('pos/', views.pos_dashboard, name='pos_dashboard'),
     path('pos/search/', views.pos_search_product, name='pos_search_product'),
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
+    path('pos/customer-points/', views.pos_get_customer_points, name='pos_get_customer_points'),
 ]

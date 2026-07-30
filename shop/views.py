@@ -29,10 +29,6 @@ import json
 logger = logging.getLogger(__name__)
 
 
-# ==========================================
-# POS (QUẢN LÝ BÁN HÀNG TẠI QUẦY)
-# ==========================================
-
 @staff_member_required(login_url='/admin/login/')
 def pos_dashboard(request):
     config = ShopConfiguration.get_config()
@@ -164,10 +160,6 @@ def pos_checkout(request):
         return JsonResponse({'status': 'error', 'message': 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.'}, status=500)
 
 
-# ==========================================
-# HỆ THỐNG & CONTEXT HELPERS
-# ==========================================
-
 def get_shop_config():
     config = cache.get('shop_config')
     if config is None:
@@ -196,10 +188,6 @@ def build_render_context(request, template_name, **kwargs):
     context.update(kwargs)
     return context
 
-
-# ==========================================
-# QUẢN LÝ SESSION KHÁCH HÀNG
-# ==========================================
 
 CUSTOMER_SESSION_KEYS = ['customer_id', 'customer_name', 'customer_phone', 'customer_auth_hash']
 
@@ -232,9 +220,6 @@ def create_user_session(request, customer):
     logger.info(f"Session created for customer: {customer.phone}")
 
 
-# ==========================================
-# TÀI KHOẢN KHÁCH HÀNG
-# ==========================================
 
 @never_cache
 @require_http_methods(["GET", "POST"])
@@ -665,9 +650,6 @@ def thanh_cong(request):
     return render(request, 'shop/thanh_cong.html', context)
 
 
-# ==========================================
-# SẢN PHẨM & TRANG CHỦ
-# ==========================================
 
 def get_top_selling_or_random(target_count=60):
     target_count = max(50, min(100, target_count))
@@ -753,10 +735,6 @@ def chi_tiet_tai_lieu(request, slug):
     context['post'] = get_object_or_404(DocumentPost, slug=slug)
     return render(request, 'shop/chi_tiet_tai_lieu.html', context)
 
-
-# ==========================================
-# GIỎ HÀNG & AJAX CART
-# ==========================================
 
 def get_cart_items(cart):
     """Hàm hỗ trợ lấy danh sách sản phẩm trong giỏ hàng, tính tổng tiền và tổng số lượng tối ưu"""
@@ -1034,3 +1012,26 @@ def ket_qua_tim_kiem(request):
     })
 
     return render(request, 'shop/ket_qua_tim_kiem.html', context)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def pos_get_customer_points(request):
+    """API lấy điểm tích lũy của khách hàng theo số điện thoại cho trang POS"""
+    phone = request.GET.get('phone', '').strip()
+    if not phone:
+        return JsonResponse({'status': 'error', 'message': 'Số điện thoại không được để trống'}, status=400)
+
+    customer = Customer.objects.filter(phone=phone).first()
+    if customer:
+        return JsonResponse({
+            'status': 'success',
+            'points': customer.points,
+            'full_name': customer.full_name
+        })
+    else:
+        return JsonResponse({
+            'status': 'success',
+            'points': 0,
+            'full_name': ''
+        })

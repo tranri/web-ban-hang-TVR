@@ -52,16 +52,14 @@
         <div class="product-grid" id="product-grid">
             {% for p in products %}
             <div class="product-card"
-                 {% if p.stock > 0 %}
-                onclick="addToCart({{ p.id }}, '{{ p.code|default:''|escapejs }}', '{{ p.name|escapejs }}', {{ p.price }}, {{ p.stock }})"
-                {% else %}
-                style="opacity: 0.6; cursor: not-allowed; background-color: #f8f9fa;"
-                {% endif %}>
+                 data-id="{{ p.id }}"
+                 data-stock="{{ p.stock }}"
+                 {% if p.stock > 0 %} onclick="addToCart({{ p.id }}, '{{ p.code|default:''|escapejs }}', '{{ p.name|escapejs }}', {{ p.price }}, {{ p.stock }})" {% else %} style="opacity: 0.6; cursor: not-allowed; background-color: #f8f9fa;" {% endif %}>
                 <div>
                     <div class="product-img-box">
                         <img src="{% if p.image %}{{ p.image.url }}{% else %}/static/images/no-image.png{% endif %}">
                     </div>
-                    
+
                     <h6 style="font-size: 13px; height: 35px; overflow: hidden;" class="text-dark mb-1">{{ p.name }}</h6>
                 </div>
                 <div>
@@ -82,19 +80,33 @@
         <h5 class="mb-3"><i class="fa fa-shopping-cart"></i> Hóa đơn hiện tại</h5>
 
         <div class="mb-2">
-            <input type="text" id="customer-phone" class="form-control form-control-sm" placeholder="Số điện thoại khách hàng...">
+            <div class="input-group input-group-sm">
+                <input type="text" id="customer-phone" class="form-control" placeholder="Số điện thoại khách hàng...">
+                <span class="input-group-text bg-warning text-dark fw-bold" id="customer-points-box" style="display: none;" title="Điểm tích lũy của khách">
+                    🎁 <span id="customer-points-val">0</span> điểm
+                </span>
+            </div>
             <div id="phone-error-msg" class="text-danger fw-bold" style="font-size: 11px; margin-top: 2px; display: none;">Vui lòng nhập đúng số điện thoại hợp lệ!</div>
+        </div>
+
+        <!-- Ô NHẬP ĐIỂM GIẢM GIÁ (Chỉ hiển thị khi điểm >= 10000) -->
+        <div class="mb-2" id="points-discount-container" style="display: none;">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-info text-white">Dùng điểm giảm</span>
+                <input type="number" id="applied-points-input" class="form-control" placeholder="Nhập điểm giảm giá..." min="0" value="0" step="1000">
+                <button class="btn btn-outline-secondary" type="button" onclick="applyPointsDiscount()">Áp dụng</button>
+            </div>
+            <div id="points-error-msg" class="text-danger fw-bold" style="font-size: 11px; margin-top: 2px; display: none;"></div>
         </div>
 
         <div class="cart-items-box">
             <table class="table table-sm mb-0 align-middle">
                 <thead>
                 <tr>
-                    <th style="width: 85px;">Mã SP</th>
-                    <th>Sản phẩm</th>
-                    <th style="width: 70px;">SL</th>
-                    <th class="text-end">Đơn giá</th>
-                    <th class="text-end">Tiền</th>
+                    <th style="width: 75px;">Mã SP</th>
+                    <th>Sản Phẩm</th>
+                    <th style="width: 65px;">SL</th>
+                    <th class="text-end" style="width: 100px;">Tổng Tiền</th>
                     <th style="width: 35px;"></th>
                 </tr>
                 </thead>
@@ -109,8 +121,12 @@
                 <span>Tổng tiền hàng:</span>
                 <strong id="lbl-total">0 đ</strong>
             </div>
+            <div class="d-flex justify-content-between mb-2" id="discount-row" style="display: none;">
+                <span>Tổng tiền giảm:</span>
+                <strong class="text-success" id="lbl-discount">0 đ</strong>
+            </div>
             <div class="d-flex justify-content-between mb-3">
-                <span>Khách thanh toán:</span>
+                <span>Thanh Toán:</span>
                 <h4 class="text-danger fw-bold m-0" id="lbl-final-total">0 đ</h4>
             </div>
             <button class="btn btn-success w-100 py-2 fw-bold" onclick="processCheckout()">
@@ -121,6 +137,13 @@
 </div>
 
 <script>
+    const ROUND_GRANULARITY = 1000;
+
+    function roundToGranularity(n){
+        if (!ROUND_GRANULARITY || ROUND_GRANULARITY <= 1) return Math.round(n);
+        return Math.round(n / ROUND_GRANULARITY) * ROUND_GRANULARITY;
+    }
+
     function updateGreetingByTime() {
         const now = new Date();
         const hours = now.getHours();
@@ -147,8 +170,14 @@
 
     updateGreetingByTime();
 
+    // cart stored in localStorage for POS
     let cart = JSON.parse(localStorage.getItem('pos_cart')) || {};
-    let warningTimeouts = {}; 
+    let warningTimeouts = {};
+    let customerPoints = 0;
+
+    // appliedDiscount is the monetary amount to subtract (VND)
+    // NOTE: this is not mutated by renderCart except for display clamping — it's the user's requested discount amount.
+    let appliedDiscount = 0;
 
     renderCart();
 
@@ -174,8 +203,11 @@
         if (isNaN(qty) || qty <= 0) {
             delete cart[id];
             if (warningTimeouts[id]) clearTimeout(warningTimeouts[id]);
+        } else if (cart[id].stock <= 0) {
+            delete cart[id];
+            alert("Sản phẩm này đã hết hàng trong kho!");
         } else if (qty > cart[id].stock) {
-            cart[id].quantity = cart[id].stock; 
+            cart[id].quantity = cart[id].stock;
             triggerWarning(id, cart[id].stock);
             return;
         } else {
@@ -187,6 +219,7 @@
     }
 
     function triggerWarning(id, stock) {
+        if (!cart[id]) return;
         cart[id].quantity = stock;
         cart[id].showWarning = true;
         saveAndRender();
@@ -214,39 +247,224 @@
         renderCart();
     }
 
+    // parse the input string into integer VND (remove separators, non-digits)
+    function parsePointsInput(raw) {
+        if (!raw) return 0;
+        const cleaned = String(raw).replace(/[^\d\-]+/g, '');
+        const n = Number(cleaned);
+        return isNaN(n) ? 0 : Math.round(n);
+    }
+
+    function applyPointsDiscount() {
+        let rawVal = document.getElementById('applied-points-input').value.trim();
+        let errorMsg = document.getElementById('points-error-msg');
+    
+        // parse numeric VND value
+        let inputVal = parsePointsInput(rawVal);
+    
+        // treat empty or zero as "remove discount"
+        if (rawVal === "" || inputVal === 0) {
+            appliedDiscount = 0;
+            errorMsg.style.display = 'none';
+            renderCart();
+            return;
+        }
+    
+        // NẾU LỖI: Bắt buộc reset appliedDiscount về 0 và gọi lại renderCart()
+        if (inputVal < 0) {
+            appliedDiscount = 0;
+            errorMsg.innerText = "Số điểm không hợp lệ!";
+            errorMsg.style.display = 'block';
+            renderCart();
+            return;
+        }
+        if (inputVal < 10000) {
+            appliedDiscount = 0;
+            errorMsg.innerText = "Tối thiểu sử dụng 10.000 điểm!";
+            errorMsg.style.display = 'block';
+            renderCart();
+            return;
+        }
+        if (inputVal % 1000 !== 0) {
+            appliedDiscount = 0;
+            errorMsg.innerText = "Số điểm giảm phải là bội của 1.000!";
+            errorMsg.style.display = 'block';
+            renderCart();
+            return;
+        }
+        if (inputVal > customerPoints) {
+            appliedDiscount = 0;
+            errorMsg.innerText = "Số điểm nhập vượt quá số điểm tích lũy hiện có!";
+            errorMsg.style.display = 'block';
+            renderCart();
+            return;
+        }
+    
+        // HỢP LỆ: Áp dụng giảm giá
+        appliedDiscount = inputVal;
+        errorMsg.style.display = 'none';
+        renderCart();
+    }
+
+    // keep appliedDiscount in sync when input is changed manually
+    document.addEventListener('DOMContentLoaded', function() {
+        const appliedInput = document.getElementById('applied-points-input');
+        if (appliedInput) {
+            appliedInput.addEventListener('input', function() {
+                const v = this.value.trim();
+                if (v === "" || parsePointsInput(v) === 0) {
+                    appliedDiscount = 0;
+                    document.getElementById('points-error-msg').style.display = 'none';
+                    renderCart();
+                }
+            });
+        }
+    });
+
     function renderCart() {
+        // Update stock from product-cards to keep consistency (if product stock changed)
+        document.querySelectorAll('.product-card').forEach(card => {
+            let pid = card.getAttribute('data-id');
+            let stock = parseInt(card.getAttribute('data-stock'));
+            if (pid && cart[pid] && !isNaN(stock)) {
+                cart[pid].stock = stock;
+                if (stock <= 0) {
+                    cart[pid].showWarning = true;
+                } else if (cart[pid].quantity > stock) {
+                    cart[pid].quantity = stock;
+                    cart[pid].showWarning = true;
+                }
+            }
+        });
+
         let tbody = document.getElementById('cart-table-body');
         tbody.innerHTML = '';
         let total = 0;
 
+        let itemsArray = [];
         for (let id in cart) {
             let item = cart[id];
+            // ensure numeric
+            item.price = Number(item.price) || 0;
+            item.quantity = Number(item.quantity) || 0;
+            // If stock is 0, treat qty as 0 (exclude from total)
+            if (item.stock <= 0) {
+                item.quantity = 0;
+            }
             let subtotal = item.price * item.quantity;
             total += subtotal;
+            itemsArray.push({ id, ...item, subtotal });
+        }
 
-            let errorMsg = item.showWarning ? `<div class="text-danger fw-bold" style="font-size: 10px; margin-top: 2px;">Vượt tồn kho!</div>` : '';
-            let inputBorderClass = item.showWarning ? 'border-danger text-danger' : '';
+        let discountRequested = Number(appliedDiscount) || 0;
+        discountRequested = Math.floor(discountRequested / ROUND_GRANULARITY) * ROUND_GRANULARITY;
+        if (discountRequested < 0) discountRequested = 0;
+        let discountAmount = Math.min(discountRequested, Math.round(total));
+
+        // allocate per-item discounts proportionally; keep rounding stable by assigning remainder to last item
+        let cashShares = []; // amount customer pays per item (after discount)
+        let discountShares = []; // discount per item
+        let allocatedDiscount = 0;
+
+        if (total > 0 && discountAmount > 0 && itemsArray.length > 0) {
+            for (let i = 0; i < itemsArray.length; i++) {
+                const it = itemsArray[i];
+                if (i < itemsArray.length - 1) {
+                    // proportional share of the total discount
+                    let prop = (it.subtotal / total) * discountAmount;
+                    let itemDiscount = Math.floor(prop / ROUND_GRANULARITY) * ROUND_GRANULARITY; // floor to granularity
+                    // clamp
+                    itemDiscount = Math.max(0, Math.min(itemDiscount, Math.round(it.subtotal)));
+                    discountShares.push(itemDiscount);
+                    allocatedDiscount += itemDiscount;
+                } else {
+                    // last item gets the remainder to ensure sum(discountShares) == discountAmount
+                    let last = discountAmount - allocatedDiscount;
+                    last = Math.max(0, Math.min(Math.round(last), Math.round(it.subtotal)));
+                    discountShares.push(last);
+                    allocatedDiscount += last;
+                }
+            }
+            // compute cash shares
+            for (let i = 0; i < itemsArray.length; i++) {
+                const it = itemsArray[i];
+                const disc = discountShares[i] || 0;
+                const pay = Math.round(it.subtotal) - disc;
+                cashShares.push(pay);
+            }
+        } else {
+            // no discount - customer pays full subtotal for each item
+            for (let i = 0; i < itemsArray.length; i++) {
+                cashShares.push(Math.round(itemsArray[i].subtotal));
+                discountShares.push(0);
+            }
+        }
+
+        // safety: if rounding introduced a small diff, fix last item
+        const sumCash = cashShares.reduce((s, v) => s + v, 0);
+        const expectedCash = Math.round(total) - discountAmount;
+        if (sumCash !== expectedCash && cashShares.length > 0) {
+            const diff = expectedCash - sumCash;
+            cashShares[cashShares.length - 1] = Math.max(0, cashShares[cashShares.length - 1] + diff);
+            // recalc discountShares for last item
+            const lastIdx = cashShares.length - 1;
+            discountShares[lastIdx] = Math.round(itemsArray[lastIdx].subtotal) - cashShares[lastIdx];
+        }
+
+        // Build table rows
+        itemsArray.forEach(function(it, idx){
+            let id = it.id;
+            let item = cart[id];
+            let subtotal = Math.round(it.subtotal);
+            let cashShare = Math.round(cashShares[idx] || 0);
+            let discShare = Math.round(discountShares[idx] || 0);
+
+            let stockDisplay = item.stock > 0
+                ? `<div class="text-danger fw-bold" style="font-size: 11px;">Tồn: ${item.stock}</div>`
+                : `<div class="fw-bold" style="font-size: 11px; color: #FF0000;">Hết hàng</div>`;
+
+            let errorMsg = (item.showWarning || item.stock <= 0) 
+                ? `<div class="text-danger fw-bold" style="font-size: 10px; margin-top: 2px;">${item.stock <= 0 ? 'Hết hàng!' : 'Vượt tồn!'}</div>` 
+                : '';
+            let inputBorderClass = (item.showWarning || item.stock <= 0) ? 'border-danger text-danger' : '';
 
             tbody.innerHTML += `
                 <tr>
-                    <td><span class="text-muted fw-bold" style="font-size: 15px;">${item.code || '---'}</span></td>
+                    <td><span class="text-muted fw-bold" style="font-size: 13px;">${item.code || '---'}</span></td>
                     <td>
-                        <div class="fw-bold" style="font-size: 14px;">${item.name}</div>
-                        <div class="text-danger fw-bold" style="font-size: 12px;">Tồn: ${item.stock}</div>
+                        <div class="fw-bold text-dark text-truncate" style="font-size: 13px; max-width: 140px;" title="${item.name}">${item.name}</div>
+                        ${stockDisplay}
+                        <div class="text-muted" style="font-size: 11px;">
+                            Gốc: <span class="fw-bold text-danger">${subtotal.toLocaleString()}đ</span> | Giảm: <span class="fw-bold text-dark">${discShare.toLocaleString()}đ</span>
+                        </div>
                     </td>
                     <td>
-                        <input type="number" value="${item.quantity}" min="1" class="fw-bold form-control form-control-sm ${inputBorderClass}" style="font-size: 15px;" onchange="updateQty(${id}, this.value)">
+                        <input type="number" value="${item.quantity}" min="1" class="fw-bold form-control form-control-sm ${inputBorderClass}" style="font-size: 13px;" onchange="updateQty(${id}, this.value)">
                         ${errorMsg}
                     </td>
-                    <td class="text-end">${item.price.toLocaleString()}đ</td>
-                    <td class="text-end fw-bold">${subtotal.toLocaleString()}đ</td>
-                    <td class="text-center"><button class="btn btn-sm text-danger" onclick="removeItem(${id})"><i class="fa fa-trash"></i></button></td>
+                    <td class="text-end fw-bold text-danger" style="font-size: 14px;">${cashShare.toLocaleString()}đ</td>
+                    <td class="text-center"><button class="btn btn-sm text-danger p-0" onclick="removeItem(${id})"><i class="fa fa-trash"></i></button></td>
                 </tr>
             `;
-        }
+        });
 
-        document.getElementById('lbl-total').innerText = total.toLocaleString() + ' đ';
-        document.getElementById('lbl-final-total').innerText = total.toLocaleString() + ' đ';
+        // update totals display
+        document.getElementById('lbl-total').innerText = Math.round(total).toLocaleString() + ' đ';
+
+        // Tìm đoạn code này trong hàm renderCart() và thay thế:
+        let discountRow = document.getElementById('discount-row');
+        if (discountAmount > 0) {
+            document.getElementById('lbl-discount').innerText = '-' + discountAmount.toLocaleString() + ' đ';
+            discountRow.style.display = 'flex';
+        } else {
+            // FIX: Cập nhật text thành '0 đ' một cách tường minh trước khi ẩn (hoặc bạn có thể đổi 'none' thành 'flex' nếu muốn dòng này luôn hiện)
+            document.getElementById('lbl-discount').innerText = '0 đ';
+            discountRow.style.display = 'none'; 
+        }
+        
+        // Tổng tiền thanh toán cuối cùng sẽ tự động chính xác vì discountAmount đã = 0
+        let finalCash = Math.max(0, Math.round(total) - discountAmount);
+        document.getElementById('lbl-final-total').innerText = finalCash.toLocaleString() + ' đ';
     }
 
     function processCheckout() {
@@ -256,19 +474,24 @@
             return;
         }
 
+        for (let id in cart) {
+            if (cart[id].stock <= 0) {
+                alert(`Sản phẩm "${cart[id].name || id}" đã hết hàng trong kho, không thể thanh toán!`);
+                return;
+            }
+        }
+
         let phoneInput = document.getElementById('customer-phone');
         let phoneError = document.getElementById('phone-error-msg');
         let phone = phoneInput.value.trim();
 
-        // Biểu thức chính quy (Regex) kiểm tra số điện thoại chuẩn Việt Nam (10 chữ số bắt đầu bằng 03, 05, 07, 08, 09)
         let phoneRegex = /^(03|05|07|08|09|01[2|6|8|9])+([0-9]{8})\b/;
 
-        // Kiểm tra nếu chưa nhập hoặc số điện thoại không đúng định dạng
         if (!phone || !phoneRegex.test(phone)) {
-            phoneInput.classList.add('border-danger'); // Thêm viền đỏ cho ô input
+            phoneInput.classList.add('border-danger');
             if (phoneError) {
                 phoneError.innerText = !phone ? "Vui lòng nhập số điện thoại khách hàng!" : "Số điện thoại không hợp lệ (Phải là SĐT Việt Nam đúng định dạng)!";
-                phoneError.style.display = 'block'; // Hiển thị thông báo dưới ô nhập
+                phoneError.style.display = 'block';
             }
             phoneInput.focus();
             return;
@@ -285,7 +508,11 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': '{{ csrf_token }}'
             },
-            body: JSON.stringify({ items: itemsArr, phone: phone })
+            body: JSON.stringify({ 
+                items: itemsArr, 
+                phone: phone, 
+                applied_points: appliedDiscount 
+            })
         })
         .then(res => res.json())
         .then(data => {
@@ -293,21 +520,73 @@
                 alert("Thanh toán thành công!");
                 cart = {};
                 localStorage.removeItem('pos_cart');
+                customerPoints = 0;
+                appliedDiscount = 0;
+                document.getElementById('points-discount-container').style.display = 'none';
+                document.getElementById('customer-points-box').style.display = 'none';
                 renderCart();
                 document.getElementById('customer-phone').value = '';
-                window.open(`/admin/shop/order/${data.order_id}/print/`, '_blank');
+                if (data.order_id) {
+                    window.open(`/admin/shop/order/${data.order_id}/print/`, '_blank');
+                }
             } else {
-                alert("Lỗi: " + data.message);
+                alert("Lỗi: " + (data.message || 'Đã có lỗi khi thanh toán'));
             }
+        })
+        .catch(err => {
+            console.error('Checkout failed', err);
+            alert('Lỗi khi gửi yêu cầu thanh toán. Vui lòng thử lại.');
         });
     }
 
-    // Tự động ẩn thông báo lỗi và viền đỏ khi người dùng bắt đầu nhập số điện thoại
+    let phonePointsTimeout = null;
+
     document.getElementById('customer-phone').addEventListener('input', function() {
-        this.classList.remove('border-danger');
+        let phoneInput = this;
+        let phone = phoneInput.value.trim();
+        let pointsBox = document.getElementById('customer-points-box');
+        let pointsVal = document.getElementById('customer-points-val');
+        let pointsDiscountContainer = document.getElementById('points-discount-container');
+        
+        phoneInput.classList.remove('border-danger');
         let phoneError = document.getElementById('phone-error-msg');
         if (phoneError) {
             phoneError.style.display = 'none';
+        }
+
+        if (phonePointsTimeout) clearTimeout(phonePointsTimeout);
+
+        let phoneRegex = /^(03|05|07|08|09|01[2|6|8|9])+([0-9]{8})\b/;
+
+        if (phoneRegex.test(phone)) {
+            phonePointsTimeout = setTimeout(() => {
+                fetch(`{% url 'shop:pos_get_customer_points' %}?phone=` + encodeURIComponent(phone))
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            customerPoints = data.points;
+                            pointsVal.innerText = customerPoints.toLocaleString();
+                            pointsBox.style.display = 'inline-block';
+
+                            if (customerPoints >= 10000) {
+                                pointsDiscountContainer.style.display = 'block';
+                            } else {
+                                pointsDiscountContainer.style.display = 'none';
+                                appliedDiscount = 0;
+                                document.getElementById('applied-points-input').value = 0;
+                                renderCart();
+                            }
+                        }
+                    })
+                    .catch(err => console.error("Lỗi khi tải điểm khách hàng:", err));
+            }, 300);
+        } else {
+            customerPoints = 0;
+            appliedDiscount = 0;
+            document.getElementById('applied-points-input').value = 0;
+            pointsBox.style.display = 'none';
+            pointsDiscountContainer.style.display = 'none';
+            renderCart();
         }
     });
 
@@ -329,7 +608,7 @@
                         : `<div class="fw-bold" style="font-size: 12px; color: #FF0000;">Hết</div>`;
 
                     grid.innerHTML += `
-                        <div class="product-card" ${onclickAttr} ${cardStyle}>
+                        <div class="product-card" data-id="${p.id}" data-stock="${p.stock}" ${onclickAttr} ${cardStyle}>
                             <div>
                                 <div class="product-img-box">
                                     <img src="${p.image}">
@@ -344,6 +623,7 @@
                         </div>
                     `;
                 });
+                renderCart(); 
             });
     });
 </script>
