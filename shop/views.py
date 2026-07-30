@@ -23,6 +23,7 @@ from django.contrib import messages as django_messages
 from django.middleware.csrf import get_token
 from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.cache import cache
 import json
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,6 @@ def pos_search_product(request):
 @staff_member_required
 @require_http_methods(["POST"])
 def pos_checkout(request):
-    """Xử lý tính tiền, tạo đơn hàng, trừ kho và trả về dữ liệu in hóa đơn"""
     try:
         data = json.loads(request.body)
         items = data.get('items', [])
@@ -160,7 +160,8 @@ def pos_checkout(request):
         })
 
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+        logger.exception("pos_checkout failed")
+        return JsonResponse({'status': 'error', 'message': 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.'}, status=500)
 
 
 # ==========================================
@@ -168,9 +169,13 @@ def pos_checkout(request):
 # ==========================================
 
 def get_shop_config():
-    config = ShopConfiguration.objects.first()
-    if not config:
-        config = ShopConfiguration.objects.create()
+    config = cache.get('shop_config')
+    if config is None:
+        config = ShopConfiguration.objects.first()
+        if not config:
+            config = ShopConfiguration.objects.create()
+        # cache for 5 minutes
+        cache.set('shop_config', config, 300)
     return config
 
 
@@ -441,14 +446,18 @@ def dang_xuat(request):
     return redirect('shop:trang_chu')
 
 
-# ==========================================
-# THANH TOÁN & ĐƠN HÀNG
-# ==========================================
-
 def thanh_toan(request):
     context = build_render_context(request, 'shop/thanh_toan.html')
     cart = request.session.get('cart', {})
     cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
+
+    # KIỂM TRA TỒN KHO TRƯỚC KHI CHO PHÉP VÀO TRANG THANH TOÁN
+    for item in cart_items:
+        product = item['product']
+        qty = item['quantity']
+        if product.stock <= 0 or product.stock < qty:
+            messages.error(request, f"Sản phẩm '{product.name}' đã hết hàng hoặc không đủ số lượng trong kho.")
+            return redirect('shop:gio_hang')
 
     order_total_value = int(tong_tien) if tong_tien else 0
     customer_id = request.session.get('customer_id')
@@ -460,7 +469,7 @@ def thanh_toan(request):
             order = form.save(commit=False)
             order.save()
             request.session['cart'] = {}
-            return redirect('shop:thanh_cong')
+            return redirect('shop:thanh_congh')
     else:
         initial_data = {'full_name': customer.full_name, 'phone': customer.phone, 'address': customer.address} if customer else {}
         form = OrderForm(initial=initial_data, customer=customer, order_total=order_total_value)
@@ -534,8 +543,12 @@ def xac_nhan_don_hang(request):
                 cart_items_data = []
                 for p_id, item in cart.items():
                     product = Product.objects.select_for_update().get(id=int(p_id))
+
+                    # KIỂM TRA TỒN KHO KHI THANH TOÁN
+                    if product.stock <= 0:
+                        raise ValueError(f"Sản phẩm {product.name} đã hết hàng. Vui lòng xóa khỏi giỏ hàng trước khi thanh toán.")
                     if product.stock < item['quantity']:
-                        raise ValueError(f"Sản phẩm {product.name} không đủ số lượng.")
+                        raise ValueError(f"Sản phẩm {product.name} không đủ số lượng trong kho (Chỉ còn {product.stock}).")
 
                     item_total = product.price * item['quantity']
                     total_amount += item_total
@@ -673,10 +686,12 @@ def get_top_selling_or_random(target_count=60):
 
     needed = target_count - len(products_list)
     if needed > 0:
-        remaining_ids = list(Product.objects.exclude(id__in=top_products_ids).values_list('id', flat=True))
-        if remaining_ids:
-            random_ids = random.sample(remaining_ids, min(needed, len(remaining_ids)))
-            random_products = list(Product.objects.filter(id__in=random_ids).select_related('category'))
+        # avoid loading all product ids: fetch a manageable pool and sample from it
+        candidate_qs = Product.objects.exclude(id__in=top_products_ids).values_list('id', flat=True)[:max(needed * 10, 200)]
+        candidate_ids = list(candidate_qs)
+        if candidate_ids:
+            random_ids = random.sample(candidate_ids, min(needed, len(candidate_ids)))
+            random_products = list(Product.objects.filter(id__in=random_ids).select_related('category').only('id', 'name', 'price', 'stock', 'slug', 'category'))
             products_list.extend(random_products)
 
     return products_list
@@ -753,7 +768,7 @@ def get_cart_items(cart):
         return cart_items, tong_tien, tong_so_luong
 
     product_ids = [int(p_id) for p_id in cart.keys()]
-    products = Product.objects.filter(id__in=product_ids)
+    products = Product.objects.filter(id__in=product_ids).only('id', 'price', 'stock', 'name', 'image', 'slug')
     product_map = {str(p.id): p for p in products}
 
     for p_id_str, item_data in cart.items():
@@ -761,12 +776,16 @@ def get_cart_items(cart):
         if product:
             qty = item_data.get('quantity', 0)
             price = product.price
-            subtotal = price * qty
-            tong_tien += subtotal
+
+            # Chỉ tính tiền vào tổng thanh toán nếu sản phẩm còn hàng trong kho
+            subtotal = price * qty if product.stock > 0 else Decimal(0)
+            if product.stock > 0:
+                tong_tien += subtotal
+
             tong_so_luong += qty
             cart_items.append({
                 'product': product,
-                'quantity': qty,
+                'quantity': 0 if product.stock <= 0 else qty,
                 'price': price,
                 'subtotal': subtotal
             })
@@ -775,6 +794,7 @@ def get_cart_items(cart):
 
 @require_http_methods(["POST"])
 @ratelimit(key='ip', rate='10/m', method='POST', block=False)
+@csrf_protect
 def them_vao_gio(request, product_id):
     if getattr(request, 'limited', False):
         logger.warning(f"Rate limit triggered for IP: {request.META.get('REMOTE_ADDR')}")
@@ -787,9 +807,13 @@ def them_vao_gio(request, product_id):
 
     try:
         qty = int(request.POST.get('quantity', 1))
-        if qty < 1: qty = 1
     except (ValueError, TypeError):
         qty = 1
+    if qty < 1:
+        qty = 1
+    MAX_QTY = 1000
+    if qty > MAX_QTY:
+        qty = MAX_QTY
 
     cart = request.session.get('cart', {})
     p_id_str = str(product_id)
@@ -842,6 +866,7 @@ def gio_hang(request):
 
 
 @require_http_methods(["POST"])
+@csrf_protect
 def xoa_khoi_gio(request, product_id):
     cart = request.session.get('cart', {})
     p_id_str = str(product_id)
@@ -863,14 +888,17 @@ def xoa_khoi_gio(request, product_id):
 
 
 @require_http_methods(["POST"])
+@csrf_protect
 def cap_nhat_gio_hang(request, product_id):
     """Cập nhật số lượng sản phẩm trong giỏ hàng qua AJAX"""
-    # Xử lý lấy số lượng linh hoạt (hỗ trợ cả form-data truyền thống lẫn JSON body)
+    # Flexible input handling (support form-data and JSON) but validate content-type
     quantity = request.POST.get('quantity')
 
     if not quantity:
         try:
-            if request.body:
+            # Only attempt JSON decode for JSON content types
+            content_type = request.META.get('CONTENT_TYPE', '')
+            if content_type.startswith('application/json') and request.body:
                 data = json.loads(request.body)
                 quantity = data.get('quantity')
         except Exception:
@@ -884,17 +912,49 @@ def cap_nhat_gio_hang(request, product_id):
     except (ValueError, TypeError):
         qty = 1
 
+    # Clamp the quantity to a reasonable maximum to avoid abuse
+    MAX_QTY = 1000
+    if qty > MAX_QTY:
+        qty = MAX_QTY
+
     cart = request.session.get('cart', {})
+    # compute totals early so we can report them
+    cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
+
     p_id_str = str(product_id)
     product = get_object_or_404(Product, id=product_id)
 
-    # KIỂM TRA TỒN KHO NGHIÊM NGẶT
+    # If product is out of stock, set cart qty to 0 (do not silently delete)
+    if product.stock == 0:
+        if p_id_str in cart:
+            cart[p_id_str]['quantity'] = 0
+            request.session['cart'] = cart
+            request.session.modified = True
+
+        cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
+        return JsonResponse({
+            'status': 'out_of_stock',
+            'message': 'Sản phẩm đã hết hàng.',
+            'current_qty': 0,
+            'available_stock': 0,
+            'tong_tien_raw': float(tong_tien),
+            'cart_total_price': float(tong_tien)
+        }, status=200)
+
+    # requested quantity exceeds available stock -> suggest corrected qty
     if qty > product.stock:
+        current_in_cart = cart.get(p_id_str, {}).get('quantity', 0)
+        suggested_qty = min(current_in_cart, product.stock)
         return JsonResponse({
             'status': 'error',
-            'message': f'Rất tiếc, sản phẩm này chỉ còn lại {product.stock} sản phẩm trong kho.'
+            'message': f'Rất tiếc, sản phẩm này chỉ còn lại {product.stock} sản phẩm trong kho.',
+            'available_stock': product.stock,
+            'current_qty': suggested_qty,
+            'tong_tien_raw': float(tong_tien),
+            'cart_total_price': float(tong_tien)
         }, status=400)
 
+    # Normal update
     if qty <= 0:
         if p_id_str in cart:
             del cart[p_id_str]
@@ -918,16 +978,13 @@ def cap_nhat_gio_hang(request, product_id):
     return JsonResponse({
         'status': 'success',
         'item_subtotal': f"{item_subtotal:,.0f}".replace(",", ".") + "đ",
+        'current_qty': cart.get(p_id_str, {}).get('quantity', 0),
         'total_items': tong_so_luong,
         'tong_tien': f"{tong_tien:,.0f}".replace(",", ".") + "đ",
         'tong_tien_raw': float(tong_tien),
         'cart_total_price': float(tong_tien)
     })
 
-
-# ==========================================
-# CHÍNH SÁCH & TÌM KIẾM
-# ==========================================
 
 def _render_policy_page(request, template_name):
     context = build_render_context(request, template_name, include_categories=False)

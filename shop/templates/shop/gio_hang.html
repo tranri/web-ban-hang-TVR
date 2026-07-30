@@ -63,6 +63,7 @@
                                     <input type="number" id="qty-input-{{ item.product.id }}"
                                            class="form-control text-center fw-bold bg-white text-dark p-0"
                                            value="{{ item.quantity }}" min="1"
+                                           data-stock="{{ item.product.stock|default:0 }}"
                                            style="-moz-appearance: textfield;"
                                            onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
                                            oninput="xuLyNhapBanPhimPage('{{ item.product.id }}', {{ item.product.stock|default:0 }})"
@@ -94,13 +95,13 @@
 
                 <div class="d-flex flex-column align-items-end mt-3 p-3 bg-light rounded border">
                     <div class="d-flex align-items-center mb-3">
-                        <h5 class="mb-0 me-3 fw-bold text-dark">Tổng cộng tiền thanh toán:</h5>
+                        <h5 class="mb-0 me-3 fw-bold text-dark">Thanh Toán:</h5>
                         <h4 class="text-danger fw-bold mb-0">
                             <span id="cart-grand-total">{{ tong_tien|intcomma }}</span> đ
                         </h4>
                     </div>
 
-                    <a href="{% url 'shop:thanh_toan' %}" class="btn btn-success btn-lg fw-bold px-4">
+                    <a href="{% url 'shop:thanh_toan' %}" class="btn btn-success btn-lg fw-bold px-4" onclick="return kiemTraTruocKhiThanhToan(event);">
                         <i class="bi bi-credit-card-2-front"></i> THANH TOÁN
                     </a>
                 </div>
@@ -134,163 +135,313 @@
 </style>
 
 <script>
-    // 1. HÀM XỬ LÝ NÚT + / -
-    // 1. HÀM XỬ LÝ NÚT + / -
-    function thayDoiSoLuongPage(pId, change, stockLimit) {
-        let inp = document.getElementById(`qty-input-${pId}`);
-        let msgEl = document.getElementById(`page-msg-${pId}`);
-        if (!inp) return;
+    function debounce(fn, wait) {
+        let t;
+        return function(...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
 
-        let curVal = parseInt(inp.value) || 0;
-        let newVal = curVal + change;
+    const debouncedGuiYeuCauCapNhat = debounce(guiYeuCauCapNhat, 400);
+    
+    function kiemTraTruocKhiThanhToan(event) {
+        const inputs = document.querySelectorAll('input[id^="qty-input-"]');
+        let hasError = false;
 
-        if (newVal < 1) return;
+        document.querySelectorAll('[id^="page-msg-"]').forEach(msg => {
+            msg.innerText = "";
+            msg.style.display = 'none';
+            msg.classList.add('d-none');
+        });
 
-        // KIỂM TRA CHẶN NGAY TRÊN GIAO DIỆN KHI VƯỢT TỒN KHO
-        if (change > 0 && stockLimit && newVal > stockLimit) {
+        for (let input of inputs) {
+            let pId = input.id.replace('qty-input-', '');
+            let msgEl = document.getElementById(`page-msg-${pId}`);
+            let stock = parseInt(input.getAttribute('data-stock')) || 0;
+            let val = parseInt(input.value) || 0;
+
+            if (input.disabled || stock <= 0) {
+                input.value = 0;
+                const itemTotalEl = document.getElementById(`total-item-${pId}`);
+                if (itemTotalEl) itemTotalEl.innerText = "0";
+
+                if (msgEl) {
+                    msgEl.innerText = "Sản phẩm đã hết hàng.";
+                    msgEl.style.display = 'block';
+                    msgEl.classList.remove('d-none');
+                }
+                hasError = true;
+            } else if (val > stock) {
+                if (msgEl) {
+                    msgEl.innerText = "Tồn kho tối đa " + stock + " sản phẩm.";
+                    msgEl.style.display = 'block';
+                    msgEl.classList.remove('d-none');
+                }
+                hasError = true;
+            }
+        }
+
+        tinhLaiTongThanhToan();
+
+        if (hasError) {
+            event.preventDefault();
+            return false;
+        }
+        return true;
+    }
+
+    function fmtMoney(amount) {
+        return new Intl.NumberFormat('vi-VN').format(amount);
+    }
+
+    // Hàm tự động quét toàn bộ các cột tổng tiền để tính lại tổng thanh toán chung
+    function tinhLaiTongThanhToan() {
+        let total = 0;
+        document.querySelectorAll('.item-total-price').forEach(el => {
+            let rawText = el.innerText.replace(/\./g, '').replace('đ', '').replace(/,/g, '').trim();
+            let val = parseFloat(rawText) || 0;
+            total += val;
+        });
+        const grandTotalEl = document.getElementById('cart-grand-total');
+        if (grandTotalEl) {
+            grandTotalEl.innerText = fmtMoney(total);
+        }
+    }
+
+    function setControlsLoading(pId, loading) {
+        const inp = document.getElementById(`qty-input-${pId}`);
+        const btns = document.querySelectorAll(`#cart-row-${pId} button:not(.btn-outline-danger)`);
+        if (inp) inp.disabled = loading;
+        btns.forEach(b => b.disabled = loading);
+    }
+
+    function reconcileServerResponse(pId, data) {
+        const inp = document.getElementById(`qty-input-${pId}`);
+        const msgEl = document.getElementById(`page-msg-${pId}`);
+        const mRow = document.getElementById(`cart-row-${pId}`);
+
+        if (data.status === 'out_of_stock' || (data.available_stock !== undefined && data.available_stock <= 0)) {
+            if (inp) {
+                inp.value = 0;
+                inp.disabled = true;
+            }
+            
+            const btns = document.querySelectorAll(`#cart-row-${pId} .input-group button`);
+            btns.forEach(b => b.disabled = true);
+
             if (msgEl) {
-                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " sản phẩm.";
+                msgEl.innerText = "Sản phẩm đã hết hàng.";
                 msgEl.classList.remove('d-none');
                 msgEl.style.display = 'block';
             }
-            return; // Chặn không cho tăng tiếp tục
+            
+            const itemTotalEl = document.getElementById(`total-item-${pId}`);
+            if (itemTotalEl) itemTotalEl.innerText = "0";
+
+            tinhLaiTongThanhToan();
+            setControlsLoading(pId, false);
+            return;
+        }
+
+        if (data.status === 'removed' || (data.current_qty !== undefined && Number(data.current_qty) === 0 && data.status !== 'out_of_stock')) {
+            if (mRow) mRow.remove();
+            tinhLaiTongThanhToan();
+            const tbody = document.querySelector('tbody');
+            if (!tbody || tbody.querySelectorAll('tr').length === 0) {
+                location.reload();
+            }
+            return;
+        }
+
+        if (data.current_qty !== undefined && inp) {
+            inp.value = data.current_qty;
+        }
+
+        if (mRow && inp) {
+            const price = parseFloat(mRow.querySelector('.prod-price').getAttribute('data-price'));
+            const qty = parseInt(inp.value) || 0;
+            const itemTotalEl = document.getElementById(`total-item-${pId}`);
+            if (itemTotalEl) itemTotalEl.innerText = fmtMoney(price * qty);
+        }
+
+        tinhLaiTongThanhToan();
+
+        if (data.message && msgEl && data.status !== 'success') {
+            msgEl.innerText = data.message;
+            msgEl.classList.remove('d-none');
+            msgEl.style.display = 'block';
+        } else if (msgEl) {
+            msgEl.classList.add('d-none');
+            msgEl.style.display = 'none';
+        }
+
+        setControlsLoading(pId, false);
+    }
+
+    function guiYeuCauCapNhat(pId, newVal) {
+        setControlsLoading(pId, true);
+        fetch(`/update-cart/${pId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ quantity: newVal })
+        })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            reconcileServerResponse(pId, body);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            setControlsLoading(pId, false);
+        });
+    }
+
+    function thayDoiSoLuongPage(pId, delta, stock) {
+        const inp = document.getElementById(`qty-input-${pId}`);
+        const msgEl = document.getElementById(`page-msg-${pId}`);
+        if (!inp || inp.disabled) return;
+        
+        let currentVal = parseInt(inp.value) || 1;
+        let newVal = currentVal + delta;
+        if (newVal < 1) newVal = 1;
+
+        if (stock && newVal > stock) {
+            if (msgEl) {
+                msgEl.innerText = "Tồn kho tối đa " + stock + " sản phẩm.";
+                msgEl.classList.remove('d-none');
+                msgEl.style.display = 'block';
+            }
+            return;
         }
 
         if (msgEl) {
             msgEl.classList.add('d-none');
             msgEl.style.display = 'none';
         }
-        inp.value = newVal;
 
-        let inpMini = document.getElementById(`mini-qty-${pId}`);
-        if (inpMini) {
-            thayDoiSoLuongGlobal(pId, change, stockLimit);
-        } else {
-            capNhatGiaoDienNộiBộTrang(pId, newVal);
-            
-            fetch(`/update-cart/${pId}/`, { 
-                method: 'POST', 
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ quantity: newVal })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'error') {
-                    if (msgEl) {
-                        msgEl.innerText = data.message;
-                        msgEl.classList.remove('d-none');
-                        msgEl.style.display = 'block';
-                    }
-                    setTimeout(() => { location.reload(); }, 1500);
-                } else if (data.status === 'success') {
-                    if (data.cart_total_price && document.getElementById('cart-grand-total')) {
-                        document.getElementById('cart-grand-total').innerText = fmtMoney(data.cart_total_price);
-                    }
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        }
+        inp.value = newVal;
+        guiYeuCauCapNhat(pId, newVal);
     }
 
-    // 2. HÀM XỬ LÝ KHI GÕ PHÍM
-    function xuLyNhapBanPhimPage(pId, stockLimit) {
-        let inp = document.getElementById(`qty-input-${pId}`);
-        let msgEl = document.getElementById(`page-msg-${pId}`);
-        if (!inp) return;
-
+    function xuLyNhapBanPhimPage(pId, stock) {
+        const inp = document.getElementById(`qty-input-${pId}`);
+        const msgEl = document.getElementById(`page-msg-${pId}`);
+        if (!inp || inp.disabled) return;
+        
         let val = parseInt(inp.value);
-        if (isNaN(val) || inp.value === '') return;
+        if (isNaN(val) || val < 1) return;
 
-        if (val < 1) { inp.value = 1; val = 1; }
-
-        if (stockLimit && val > stockLimit) {
-            inp.value = stockLimit;
-            val = stockLimit;
+        if (stock && val > stock) {
+            val = stock;
+            inp.value = stock;
             if (msgEl) {
-                msgEl.innerText = "Tồn kho tối đa " + stockLimit + " cái.";
+                msgEl.innerText = "Tồn kho tối đa " + stock + " sản phẩm.";
                 msgEl.classList.remove('d-none');
+                msgEl.style.display = 'block';
             }
         } else {
-            if (msgEl) msgEl.classList.add('d-none');
+            if (msgEl) {
+                msgEl.classList.add('d-none');
+                msgEl.style.display = 'none';
+            }
         }
 
-        let inpMini = document.getElementById(`mini-qty-${pId}`);
-        if (inpMini) {
-            inpMini.value = val;
-            capNhatTongTienMini(pId, stockLimit);
-            let msgMini = document.getElementById(`mini-msg-${pId}`);
-            guiCapNhatGioHangBackend(pId, val, msgMini);
-        } else {
-            capNhatGiaoDienNộiBộTrang(pId, val);
-            
-            fetch(`/update-cart/${pId}/`, { 
-                method: 'POST', 
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ quantity: val })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'error') {
-                    if (msgEl) {
-                        msgEl.innerText = data.message;
-                        msgEl.classList.remove('d-none');
-                    }
-                    setTimeout(() => { location.reload(); }, 1500);
-                } else if (data.status === 'success') {
-                    if (data.cart_total_price && document.getElementById('cart-grand-total')) {
-                        document.getElementById('cart-grand-total').innerText = fmtMoney(data.cart_total_price);
-                    }
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        }
+        debouncedGuiYeuCauCapNhat(pId, val);
     }
 
-    // 3. CÁC HÀM HỖ TRỢ KHÁC
     function xuLyRongPage(pId) {
-        let inp = document.getElementById(`qty-input-${pId}`);
-        if (!inp) return;
-        if (inp.value === '' || parseInt(inp.value) < 1 || isNaN(parseInt(inp.value))) {
+        const inp = document.getElementById(`qty-input-${pId}`);
+        if (!inp || inp.disabled) return;
+        if (!inp.value || parseInt(inp.value) < 1) {
             inp.value = 1;
-            xuLyNhapBanPhimPage(pId, null);
+            guiYeuCauCapNhat(pId, 1);
         }
     }
 
-    function capNhatGiaoDienNộiBộTrang(pId, newVal) {
-        let mRow = document.getElementById(`cart-row-${pId}`);
-        if (!mRow) return;
-        let price = parseFloat(mRow.querySelector('.prod-price').getAttribute('data-price'));
-        document.getElementById(`total-item-${pId}`).innerText = fmtMoney(price * newVal);
-        let total = 0;
-        document.querySelectorAll('.item-total-price').forEach(el => {
-            total += parseFloat(el.innerText.replace(/\./g, ''));
+    function xoaSanPhamPage(pId) {
+        fetch("{% url 'shop:xoa_khoi_gio' 0 %}".replace('0', pId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Lỗi kết nối hoặc đường dẫn không tồn tại.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                const row = document.getElementById(`cart-row-${pId}`);
+                if (row) row.remove();
+
+                tinhLaiTongThanhToan();
+
+                const tbody = document.querySelector('tbody');
+                if (!tbody || tbody.querySelectorAll('tr').length === 0) {
+                    location.reload();
+                }
+            } else {
+                alert(data.message || 'Có lỗi xảy ra khi xóa sản phẩm.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Không thể xóa sản phẩm. Vui lòng kiểm tra lại đường dẫn API.');
         });
-        document.getElementById('cart-grand-total').innerText = fmtMoney(total);
     }
 
     document.addEventListener("DOMContentLoaded", function() {
-        {% for item in cart_items %}
-        {
-            let pId = '{{ item.product.id }}';
-            let stock = {{ item.product.stock|default:0 }};
-            let qty = {{ item.quantity }};
+        const inputs = document.querySelectorAll('input[id^="qty-input-"]');
+
+        inputs.forEach(input => {
+            let stock = parseInt(input.getAttribute('data-stock')) || 0;
+            input.max = stock;
+            let pId = input.id.replace('qty-input-', '');
             let msgEl = document.getElementById(`page-msg-${pId}`);
+            let row = document.getElementById(`cart-row-${pId}`);
+            let itemTotalEl = document.getElementById(`total-item-${pId}`);
 
-            if (msgEl && stock > 0 && qty > stock) {
-                msgEl.innerText = "Tồn kho tối đa " + stock + " cái.";
-                msgEl.style.display = 'block';
-                msgEl.classList.add('text-danger');
+            if (stock <= 0) {
+                input.value = 0;
+                input.disabled = true;
+                if (row) {
+                    let btns = row.querySelectorAll('.input-group button');
+                    btns.forEach(b => b.disabled = true);
+                }
+
+                if (msgEl) {
+                    msgEl.innerText = "Sản phẩm đã hết hàng.";
+                    msgEl.style.display = 'block';
+                    msgEl.classList.remove('d-none');
+                }
+                
+                if (itemTotalEl) {
+                    itemTotalEl.innerText = "0";
+                }
+            } else {
+                let val = parseInt(input.value) || 0;
+                if (val > stock) {
+                    val = stock;
+                    input.value = stock;
+                }
+                if (row) {
+                    let priceEl = row.querySelector('.prod-price');
+                    if (priceEl && itemTotalEl) {
+                        let price = parseFloat(priceEl.getAttribute('data-price')) || 0;
+                        itemTotalEl.innerText = fmtMoney(price * val);
+                    }
+                }
             }
-        }
-        {% endfor %}
-    });
+        });
 
-    function xoaSanPhamPage(pId) { xoaSanPhamGlobal(pId); }
+        // Tự động tính toán lại tổng tiền thanh toán ngay khi tải trang
+        tinhLaiTongThanhToan();
+    });
 </script>
 {% endblock %}
