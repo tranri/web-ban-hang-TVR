@@ -7,9 +7,9 @@ tối ưu hóa hiệu suất và tăng cường bảo mật
 python manage.py makemigrations
 python manage.py migrate
 
-python manage.py createsuperuser
-
 python manage.py runserver
+
+python manage.py createsuperuser
 
 python manage.py award_points
 

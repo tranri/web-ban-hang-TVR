@@ -22,7 +22,7 @@ from django.template import Template, RequestContext
 
 from .models import (
     Category, Product, ShopConfiguration, BannerImage,
-    DocumentPost, Order, OrderItem, Customer, SalesReport
+    DocumentPost, Order, OrderItem, Customer, SalesReport, InventoryBatch
 )
 
 
@@ -48,17 +48,24 @@ class CategoryAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('parent')
 
-
+class InventoryBatchInline(admin.TabularInline):
+    model = InventoryBatch
+    extra = 0
+    readonly_fields = ['created_at']  # Bỏ initial_quantity khỏi readonly nếu muốn hiển thị linh hoạt, hoặc giữ nguyên vì đã được gán tự động qua save()
+    fields = ['quantity', 'initial_quantity', 'import_price', 'created_at']
+    can_delete = False
+    
+    
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'code', 'price', 'sale_price_display', 'import_price_display',
-        'stock_display', 'new_import_price', 'new_stock', 'action_button',
-        'defective_quantity', 'subtract_defective_button',
+        'stock_display', 'defective_quantity', 'subtract_defective_button',
         'tax_rate', 'after_tax_profit_display'
     ]
-    list_editable = ['code', 'price', 'new_import_price', 'new_stock', 'tax_rate', 'defective_quantity']
+    list_editable = ['code', 'price', 'tax_rate', 'defective_quantity']
     readonly_fields = ['import_price', 'stock', 'sale_price']
+    inlines = [InventoryBatchInline]
     list_filter = ['category']
     search_fields = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
@@ -104,70 +111,15 @@ class ProductAdmin(admin.ModelAdmin):
         url = reverse('admin:product_subtract_defective', args=[obj.pk])
         return format_html('<a class="button" href="{}">Trừ</a>', url)
 
-    subtract_defective_button.short_description = mark_safe("TRỪ<br>HÀNG LỖI")
-
-    def action_button(self, obj):
-        url = reverse('admin:product_update_data', args=[obj.pk])
-        return format_html('<a class="button" href="{}">CHUYỂN</a>', url)
-
-    action_button.short_description = "Cập nhật"
+    subtract_defective_button.short_description = mark_safe("TRỪ<br>HÀNG LỖI")    
 
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('<path:object_id>/update-data/', self.admin_site.admin_view(self.update_data_view),
-                 name='product_update_data'),
             path('<path:object_id>/subtract-defective/', self.admin_site.admin_view(self.subtract_defective_view),
                  name='product_subtract_defective'),
         ]
-        return custom_urls + urls
-
-    def update_data_view(self, request, object_id):
-        product = get_object_or_404(Product, pk=object_id)
-
-        if product.stock != 0:
-            messages.error(request,
-                           f"Không thể cập nhật: Tồn kho của '{product.name}' đang là {product.stock}, phải bằng 0 mới được phép cập nhật!")
-            return redirect('admin:shop_product_changelist')
-
-        if product.new_stock is None or product.new_stock == 0:
-            messages.error(request, "Không thể cập nhật: Số lượng mới phải khác 0!")
-            return redirect('admin:shop_product_changelist')
-
-        if product.new_import_price is None or product.new_import_price == 0:
-            messages.error(request, "Không thể cập nhật: Giá nhập mới phải khác 0!")
-            return redirect('admin:shop_product_changelist')
-
-        old_import_price = product.import_price
-        new_import_price = product.new_import_price
-
-        try:
-            with transaction.atomic():
-                backfilled = 0
-                if old_import_price is not None:
-                    backfilled = OrderItem.objects.filter(
-                        product=product,
-                        import_price__isnull=True,
-                        order__created_at__lte=timezone.now()
-                    ).update(import_price=old_import_price)
-
-                product.sale_price = product.price
-                if new_import_price and new_import_price > 0:
-                    product.import_price = new_import_price
-                    product.new_import_price = 0
-
-                product.stock = product.new_stock if product.new_stock is not None else 0
-                product.new_stock = 0
-                product.save()
-
-                msg = f"Đã cập nhật thành công sản phẩm: {product.name}."
-                if backfilled:
-                    msg += f" Đã lưu giá nhập cũ vào {backfilled} mục đơn hàng để bảo toàn báo cáo giá vốn."
-                messages.success(request, msg)
-        except Exception as e:
-            messages.error(request, f"Lỗi khi cập nhật sản phẩm: {str(e)}")
-
-        return redirect('admin:shop_product_changelist')
+        return custom_urls + urls   
 
     def subtract_defective_view(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
@@ -515,8 +467,19 @@ class OrderAdmin(admin.ModelAdmin):
                 discount_per_unit = order_item.discount_per_unit or 0
                 final_unit_price = base_price - discount_per_unit
 
-                product.stock += returned_qty
-                product.save()
+                # Trả hàng lại vào lô gần nhất (FIFO đảo ngược / LIFO)
+                latest_batch = product.batches.order_by('-created_at').first()
+                if latest_batch:
+                    latest_batch.quantity += returned_qty
+                    latest_batch.save()
+                else:
+                    # Rơi vào trường hợp Sp chưa từng có lô nhưng lại bị trả hàng, tạo lô tạm
+                    InventoryBatch.objects.create(
+                        product=product,
+                        initial_quantity=returned_qty,
+                        quantity=returned_qty,
+                        import_price=product.import_price
+                    )
 
                 refund_total_amount = base_price * returned_qty
                 refund_final_amount = final_unit_price * returned_qty
@@ -564,8 +527,20 @@ class OrderAdmin(admin.ModelAdmin):
                 order_items = OrderItem.objects.filter(order=order).select_related('product')
                 for order_item in order_items:
                     product = order_item.product
-                    product.stock += order_item.quantity
-                    product.save()
+
+                    # Trả hàng lại vào lô gần nhất (FIFO đảo ngược / LIFO)
+                    latest_batch = product.batches.order_by('-created_at').first()
+                    if latest_batch:
+                        latest_batch.quantity += order_item.quantity
+                        latest_batch.save()
+                    else:
+                        # Rơi vào trường hợp Sp chưa từng có lô nhưng lại bị trả hàng, tạo lô tạm
+                        InventoryBatch.objects.create(
+                            product=product,
+                            initial_quantity=order_item.quantity,
+                            quantity=order_item.quantity,
+                            import_price=product.import_price
+                        )
 
                 clean_phone = str(order.phone).strip() if order.phone else ""
                 if clean_phone:

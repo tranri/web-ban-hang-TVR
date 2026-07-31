@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from django.db.models.signals import post_save, post_delete
+from django.db.models import Sum
 import re
 
    
@@ -59,7 +60,7 @@ class Category(models.Model):
 
 
 class Product(models.Model):
-    category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE, verbose_name="Danh mục")
+    category = models.ForeignKey('Category', related_name='products', on_delete=models.CASCADE, verbose_name="Danh mục")
     code = models.CharField(max_length=100, unique=True, verbose_name="Mã sản phẩm", null=True, blank=True)
     name = models.CharField(max_length=200, verbose_name="Tên sản phẩm")
     slug = models.SlugField(max_length=200, unique=True, verbose_name="Đường dẫn (Slug)")
@@ -68,13 +69,9 @@ class Product(models.Model):
     datasheet_url = models.URLField(blank=True, verbose_name="Link Tài liệu (Datasheet)")
 
     price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán (VNĐ)")
-    import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Nhập (VNĐ)")
+    import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Nhập Lô #1 (VNĐ)")
     sale_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Giá Bán Cũ (VNĐ)")
-    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho")
-
-    new_import_price = models.DecimalField(max_digits=10, decimal_places=0, default=0, blank=True, null=True,
-                                           verbose_name="Giá Nhập Mới (VNĐ)")
-    new_stock = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số Lượng Mới")
+    stock = models.IntegerField(default=0, verbose_name="Số Lượng Tồn Kho Lô #1")
 
     tax_rate = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="Thuế (%)")
     defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
@@ -86,6 +83,16 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def active_batch(self):
+        """Lấy lô hàng hiện tại đang bán theo FIFO (lô đầu tiên còn hàng)"""
+        return self.batches.filter(quantity__gt=0).order_by('created_at').first()
+
+    @property
+    def total_stock(self):
+        """Tổng tồn kho của tất cả các lô (dùng khi cần xem tổng)"""
+        return self.batches.aggregate(total=Sum('quantity'))['total'] or 0
 
     @property
     def discount_percentage(self):
@@ -360,3 +367,46 @@ def clear_category_cache(sender, instance, **kwargs):
 @receiver([post_save, post_delete], sender=DocumentPost)
 def clear_document_cache(sender, instance, **kwargs):
     cache.delete('shop_document_posts')
+
+
+class InventoryBatch(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='batches', verbose_name="Sản phẩm")
+
+    quantity = models.PositiveIntegerField(default=0, verbose_name="Số lượng tồn trong lô")
+    initial_quantity = models.PositiveIntegerField(default=0, verbose_name="Số lượng ban đầu")
+    import_price = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Giá nhập lô (VNĐ)")
+
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Thời gian nhập kho")
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "Lô hàng (Batch)"
+        verbose_name_plural = "Quản lý Lô hàng (FIFO)"
+
+    def __str__(self):
+        return f"Lô #{self.id} - {self.product.name} (Còn: {self.quantity}/{self.initial_quantity} | Giá: {self.import_price:,.0f}đ)"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:  # Khi tạo mới lô hàng
+            # Gán số lượng ban đầu bằng số lượng nhập vào
+            self.initial_quantity = self.quantity
+        super().save(*args, **kwargs)
+
+
+@receiver([post_save, post_delete], sender=InventoryBatch)
+def sync_product_stock_with_batches(sender, instance, **kwargs):
+    product = instance.product
+
+    # Lấy lô hàng đầu tiên còn hàng theo FIFO (Lô #1)
+    active_batch = product.batches.filter(quantity__gt=0).order_by('created_at').first()
+
+    if active_batch:
+        product.stock = active_batch.quantity
+        product.import_price = active_batch.import_price
+    else:
+        # Nếu tất cả các lô đều hết hàng
+        latest_batch = product.batches.order_by('-created_at').first()
+        product.stock = 0
+        product.import_price = latest_batch.import_price if latest_batch else Decimal(0)
+
+    product.save(update_fields=['stock', 'import_price'])
