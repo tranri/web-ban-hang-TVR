@@ -1,14 +1,15 @@
 from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
-from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from django.db.models.signals import post_save, post_delete
 import re
 
-
+   
+    
 def normalize_phone(phone: str) -> str:
     if not phone:
         return ""
@@ -19,7 +20,7 @@ def normalize_phone(phone: str) -> str:
 
 class Customer(models.Model):
     full_name = models.CharField(max_length=255, verbose_name="Họ tên")
-    phone = models.CharField(max_length=20, unique=True, verbose_name="Số điện thoại")
+    phone = models.CharField(max_length=20, db_index=True, verbose_name="Số điện thoại")
     password = models.CharField(max_length=128, verbose_name="Mật khẩu")  # Sẽ lưu mật khẩu đã băm (hash)
     created_at = models.DateTimeField(auto_now_add=True)
     address = models.TextField(verbose_name="Địa chỉ", null=True, blank=True)
@@ -190,11 +191,11 @@ class Order(models.Model):
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='orders',
                                  verbose_name="Khách hàng")
     full_name = models.CharField(max_length=255, verbose_name="Họ và tên")
-    phone = models.CharField(max_length=20, verbose_name="Số điện thoại")
+    phone = models.CharField(max_length=20, db_index=True, verbose_name="Số điện thoại")
     address = models.TextField(verbose_name="Địa chỉ")
     note = models.TextField(blank=True, null=True, verbose_name="Ghi chú")
     total_price = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tổng tiền Chưa Giảm")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày có đơn hàng")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Ngày có đơn hàng")
     points_awarded = models.BooleanField(default=False, verbose_name="Đã cộng điểm")
     awarded_points = models.IntegerField(default=0, verbose_name="Số điểm cộng khi hoàn tất đơn hàng")
     applied_points = models.IntegerField(default=0, verbose_name="Điểm dùng để giảm giá")
@@ -349,3 +350,13 @@ class SalesReport(Order):
         proxy = True
         verbose_name = "Báo cáo"
         verbose_name_plural = "Báo cáo"
+
+
+@receiver([post_save, post_delete], sender=Category)
+def clear_category_cache(sender, instance, **kwargs):
+    cache.delete('shop_categories_tree')
+    cache.delete('shop_categories_all')
+
+@receiver([post_save, post_delete], sender=DocumentPost)
+def clear_document_cache(sender, instance, **kwargs):
+    cache.delete('shop_document_posts')

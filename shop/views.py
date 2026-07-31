@@ -24,6 +24,7 @@ from django.middleware.csrf import get_token
 from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
+from .services import OrderService
 import json
 
 logger = logging.getLogger(__name__)
@@ -70,91 +71,14 @@ def pos_search_product(request):
 def pos_checkout(request):
     try:
         data = json.loads(request.body)
-        items = data.get('items', [])
-        customer_phone = data.get('phone', '').strip()
-        customer_name = data.get('full_name', 'Khách lẻ tại quầy').strip()
-        customer_address = data.get('address', 'Mua trực tiếp tại cửa hàng').strip()
-        applied_points = int(data.get('applied_points', 0))
-
-        if not items:
-            return JsonResponse({'status': 'error', 'message': 'Giỏ hàng trống!'}, status=400)
-
-        with transaction.atomic():
-            total_price = Decimal(0)
-            order_items_data = []
-
-            for item in items:
-                product = Product.objects.select_for_update().get(id=int(item['product_id']))
-                qty = int(item['quantity'])
-
-                if product.stock < qty:
-                    return JsonResponse({'status': 'error', 'message': f'Sản phẩm {product.name} không đủ tồn kho (Còn: {product.stock})'}, status=400)
-
-                item_total = product.price * qty
-                total_price += item_total
-
-                order_items_data.append({
-                    'product': product,
-                    'quantity': qty,
-                    'price': product.price,
-                    'import_price': product.import_price,
-                    'item_total': item_total
-                })
-
-            customer = None
-            if customer_phone:
-                customer, _ = Customer.objects.get_or_create(
-                    phone=customer_phone,
-                    defaults={'full_name': customer_name, 'address': customer_address, 'password': ''}
-                )
-                if applied_points > 0:
-                    if customer.points >= applied_points:
-                        customer.points -= applied_points
-                        customer.save(update_fields=['points'])
-                    else:
-                        return JsonResponse({'status': 'error', 'message': 'Khách hàng không đủ điểm tích lũy!'}, status=400)
-
-            final_price = max(Decimal(0), total_price - Decimal(applied_points))
-
-            order = Order.objects.create(
-                customer=customer,
-                full_name=customer_name,
-                phone=customer_phone or '0000000000',
-                address=customer_address,
-                total_price=total_price,
-                applied_points=applied_points,
-                final_price=final_price,
-                is_printed=True,
-                printed_at=timezone.now()
-            )
-
-            for it in order_items_data:
-                product = it['product']
-                product.stock -= it['quantity']
-                product.save()
-
-                OrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    quantity=it['quantity'],
-                    price=it['price'],
-                    import_price=it['import_price']
-                )
-
-            awarded = order.calculate_points()
-            order.awarded_points = awarded
-            order.save(update_fields=['awarded_points'])
-
-            if customer:
-                customer.points += awarded
-                customer.save(update_fields=['points'])
-
+        order = OrderService.create_pos_order(data)
         return JsonResponse({
             'status': 'success',
             'order_id': order.id,
             'message': 'Thanh toán thành công!'
         })
-
+    except ValueError as ve:
+        return JsonResponse({'status': 'error', 'message': str(ve)}, status=400)
     except Exception as e:
         logger.exception("pos_checkout failed")
         return JsonResponse({'status': 'error', 'message': 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.'}, status=500)
@@ -171,11 +95,11 @@ def get_shop_config():
     return config
 
 
-def get_base_context(request=None, include_categories=True):
-    context = {'config': get_shop_config()}
-
+def get_base_context(request=None, include_categories=True):    
+    context = {'config': ShopConfiguration.get_config()}
+    
     if include_categories:
-        context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+        context['categories'] = get_cached_categories_tree()
 
     if request:
         context['customer_id'] = request.session.get('customer_id')
@@ -287,7 +211,7 @@ def tai_khoan(request):
             context['password_form'] = ChangePasswordForm()
 
         # Tối ưu hóa chống N+1 Query bằng prefetch_related
-        customer_orders = Order.objects.filter(phone=customer.phone).prefetch_related('orderitem_set__product').order_by('-created_at')
+        customer_orders = Order.objects.filter(phone=customer.phone).prefetch_related('items__product').order_by('-created_at')
         context['customer_orders'] = customer_orders
 
         orders_with_items = []
@@ -295,7 +219,7 @@ def tai_khoan(request):
         limit = timedelta(seconds=50)
 
         for order in customer_orders:
-            order_items = order.orderitem_set.all()
+            order_items = order.items.all()
             items_with_totals = []
             for item in order_items:
                 unit_price = item.price
@@ -519,97 +443,7 @@ def xac_nhan_don_hang(request):
 
     if form.is_valid():
         try:
-            with transaction.atomic():
-                order = form.save(commit=False)
-                order.total_price = 0
-                order.save()
-
-                total_amount = Decimal(0)
-                cart_items_data = []
-                for p_id, item in cart.items():
-                    product = Product.objects.select_for_update().get(id=int(p_id))
-
-                    # KIỂM TRA TỒN KHO KHI THANH TOÁN
-                    if product.stock <= 0:
-                        raise ValueError(f"Sản phẩm {product.name} đã hết hàng. Vui lòng xóa khỏi giỏ hàng trước khi thanh toán.")
-                    if product.stock < item['quantity']:
-                        raise ValueError(f"Sản phẩm {product.name} không đủ số lượng trong kho (Chỉ còn {product.stock}).")
-
-                    item_total = product.price * item['quantity']
-                    total_amount += item_total
-                    cart_items_data.append({
-                        'product': product,
-                        'quantity': item['quantity'],
-                        'total': item_total,
-                        'price': product.price
-                    })
-
-                applied_points = form.cleaned_data.get('applied_points') or 0
-                discount_value = Decimal(int(applied_points))
-
-                item_discounts = []
-                allocated_discount = Decimal(0)
-                for i, it in enumerate(cart_items_data):
-                    if i < len(cart_items_data) - 1 and total_amount > 0:
-                        exact_disc = (it['total'] / total_amount) * discount_value
-                        rounded_disc = (exact_disc / 1000).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * 1000
-                        rounded_disc = max(Decimal(0), min(rounded_disc, it['total']))
-                        item_discounts.append(rounded_disc)
-                        allocated_discount += rounded_disc
-                    else:
-                        last_disc = discount_value - allocated_discount
-                        last_disc = max(Decimal(0), min(last_disc, it['total']))
-                        item_discounts.append(last_disc)
-                        allocated_discount += last_disc
-
-                final_price = max(Decimal(0), total_amount - discount_value)
-
-                order.total_price = total_amount
-                order.applied_points = applied_points
-                order.final_price = final_price
-                order.awarded_points = order.calculate_points()
-                order.save()
-
-                for i, it in enumerate(cart_items_data):
-                    product = it['product']
-                    qty = it['quantity']
-                    total_item_disc = item_discounts[i]
-                    disc_per_unit = total_item_disc / Decimal(qty) if qty > 0 else Decimal(0)
-
-                    product.stock -= qty
-                    product.save()
-
-                    OrderItem.objects.create(
-                        order=order,
-                        product=product,
-                        quantity=qty,
-                        price=product.price,
-                        discount_per_unit=disc_per_unit,
-                        import_price=product.import_price,
-                    )
-
-                customer, created = Customer.objects.get_or_create(
-                    phone=order.phone,
-                    defaults={'full_name': order.full_name, 'address': order.address, 'password': ''}
-                )
-                if not created:
-                    customer.full_name = order.full_name
-                    customer.address = order.address
-                    customer.save(update_fields=['full_name', 'address'])
-
-                order.customer = customer
-                order.save(update_fields=['customer'])
-
-                if applied_points and applied_points > 0:
-                    if customer.points >= applied_points:
-                        customer.points = customer.points - applied_points
-                        customer.save(update_fields=['points'])
-                    else:
-                        raise ValueError("Không đủ điểm để trừ cho đơn hàng.")
-
-                order_items = OrderItem.objects.filter(order=order)
-                threading.Thread(target=send_telegram_notification, args=(order, order_items), daemon=True).start()
-
+            order, order_items, customer = OrderService.create_web_order(form, cart)
             del request.session['cart']
 
             return render(request, 'shop/xac_nhan_thanh_cong.html', {
@@ -620,28 +454,19 @@ def xac_nhan_don_hang(request):
 
         except Exception as e:
             messages.error(request, str(e))
-            context = build_render_context(request, 'shop/thanh_toan.html')
-            context.update({
-                'cart_items': cart_items,
-                'tong_tien': tong_tien,
-                'tong_so_luong': tong_so_luong,
-                'form': form,
-                'current_customer': session_customer,
-                'order_total_value': order_total_value
-            })
-            return render(request, 'shop/thanh_toan.html', context)
     else:
-        context = build_render_context(request, 'shop/thanh_toan.html')
-        context.update({
-            'cart_items': cart_items,
-            'tong_tien': tong_tien,
-            'tong_so_luong': tong_so_luong,
-            'form': form,
-            'current_customer': session_customer,
-            'order_total_value': order_total_value
-        })
         messages.error(request, "Thông tin không hợp lệ. Vui lòng kiểm tra lại.")
-        return render(request, 'shop/thanh_toan.html', context)
+
+    context = build_render_context(request, 'shop/thanh_toan.html')
+    context.update({
+        'cart_items': cart_items,
+        'tong_tien': tong_tien,
+        'tong_so_luong': tong_so_luong,
+        'form': form,
+        'current_customer': session_customer,
+        'order_total_value': order_total_value
+    })
+    return render(request, 'shop/thanh_toan.html', context)
 
 
 def thanh_cong(request):
@@ -681,7 +506,7 @@ def get_top_selling_or_random(target_count=60):
 
 def trang_chu(request):
     context = build_render_context(request, 'shop/trang_chu.html', include_categories=False)
-    context['categories'] = Category.objects.all()
+    context['categories'] = get_cached_all_categories()  # Sử dụng cache toàn bộ danh mục
     context['banners'] = context['config'].banners.all()
 
     is_filtered = False
@@ -703,7 +528,7 @@ def trang_chu(request):
 
 def chi_tiet_san_pham(request, slug):
     context = build_render_context(request, 'shop/chi_tiet_san_pham.html', include_categories=False)
-    context['categories'] = Category.objects.all()
+    context['categories'] = get_cached_all_categories()  # Sử dụng cache toàn bộ danh mục
     context['product'] = get_object_or_404(Product, slug=slug)
 
     cart = request.session.get('cart', {})
@@ -726,7 +551,7 @@ def lien_he(request):
 
 def tai_lieu(request):
     context = build_render_context(request, 'shop/tai_lieu.html')
-    context['posts'] = DocumentPost.objects.all()
+    context['posts'] = get_cached_document_posts() # Sử dụng cache bài viết
     return render(request, 'shop/tai_lieu.html', context)
 
 
@@ -966,7 +791,7 @@ def cap_nhat_gio_hang(request, product_id):
 
 def _render_policy_page(request, template_name):
     context = build_render_context(request, template_name, include_categories=False)
-    context['categories'] = Category.objects.filter(parent__isnull=True)
+    context['categories'] = get_cached_categories_tree() # Sử dụng cache danh mục gốc
     return render(request, template_name, context)
 
 
@@ -1035,3 +860,29 @@ def pos_get_customer_points(request):
             'points': 0,
             'full_name': ''
         })
+    
+    
+    
+def get_cached_categories_tree():
+    """Lấy danh mục phân cấp gốc từ cache"""
+    categories = cache.get('shop_categories_tree')
+    if categories is None:
+        categories = list(Category.objects.filter(parent__isnull=True).prefetch_related('children'))
+        cache.set('shop_categories_tree', categories, 900)
+    return categories
+
+def get_cached_all_categories():
+    """Lấy toàn bộ danh mục từ cache"""
+    categories = cache.get('shop_categories_all')
+    if categories is None:
+        categories = list(Category.objects.all())
+        cache.set('shop_categories_all', categories, 900)
+    return categories
+
+def get_cached_document_posts():
+    """Lấy danh sách bài viết tài liệu từ cache"""
+    posts = cache.get('shop_document_posts')
+    if posts is None:
+        posts = list(DocumentPost.objects.all())
+        cache.set('shop_document_posts', posts, 900)
+    return posts
