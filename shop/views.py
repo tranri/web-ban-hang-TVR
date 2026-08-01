@@ -95,9 +95,9 @@ def get_shop_config():
     return config
 
 
-def get_base_context(request=None, include_categories=True):    
+def get_base_context(request=None, include_categories=True):
     context = {'config': ShopConfiguration.get_config()}
-    
+
     if include_categories:
         context['categories'] = get_cached_categories_tree()
 
@@ -142,7 +142,6 @@ def create_user_session(request, customer):
     request.session.set_expiry(1800)  # 30 phút
 
     logger.info(f"Session created for customer: {customer.phone}")
-
 
 
 @never_cache
@@ -475,7 +474,6 @@ def thanh_cong(request):
     return render(request, 'shop/thanh_cong.html', context)
 
 
-
 def get_top_selling_or_random(target_count=60):
     target_count = max(50, min(100, target_count))
     ba_tuan_truoc = timezone.now() - timedelta(weeks=3)
@@ -551,7 +549,7 @@ def lien_he(request):
 
 def tai_lieu(request):
     context = build_render_context(request, 'shop/tai_lieu.html')
-    context['posts'] = get_cached_document_posts() # Sử dụng cache bài viết
+    context['posts'] = get_cached_document_posts()  # Sử dụng cache bài viết
     return render(request, 'shop/tai_lieu.html', context)
 
 
@@ -791,7 +789,7 @@ def cap_nhat_gio_hang(request, product_id):
 
 def _render_policy_page(request, template_name):
     context = build_render_context(request, template_name, include_categories=False)
-    context['categories'] = get_cached_categories_tree() # Sử dụng cache danh mục gốc
+    context['categories'] = get_cached_categories_tree()  # Sử dụng cache danh mục gốc
     return render(request, template_name, context)
 
 
@@ -860,9 +858,8 @@ def pos_get_customer_points(request):
             'points': 0,
             'full_name': ''
         })
-    
-    
-    
+
+
 def get_cached_categories_tree():
     """Lấy danh mục phân cấp gốc từ cache"""
     categories = cache.get('shop_categories_tree')
@@ -871,6 +868,7 @@ def get_cached_categories_tree():
         cache.set('shop_categories_tree', categories, 900)
     return categories
 
+
 def get_cached_all_categories():
     """Lấy toàn bộ danh mục từ cache"""
     categories = cache.get('shop_categories_all')
@@ -878,6 +876,7 @@ def get_cached_all_categories():
         categories = list(Category.objects.all())
         cache.set('shop_categories_all', categories, 900)
     return categories
+
 
 def get_cached_document_posts():
     """Lấy danh sách bài viết tài liệu từ cache"""

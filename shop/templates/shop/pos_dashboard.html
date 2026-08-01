@@ -103,10 +103,11 @@
             <table class="table table-sm mb-0 align-middle">
                 <thead>
                 <tr>
-                    <th style="width: 75px;">Mã SP</th>
+                    <th style="width: 65px;">Mã SP</th>
                     <th>Sản Phẩm</th>
-                    <th style="width: 65px;">SL</th>
-                    <th class="text-end" style="width: 100px;">Tổng Tiền</th>
+                    <th style="width: 55px;">SL</th>
+                    <th class="text-end" style="width: 95px;">Đơn giá</th>
+                    <th class="text-end" style="width: 95px;">Thanh Tiền</th>
                     <th style="width: 35px;"></th>
                 </tr>
                 </thead>
@@ -176,7 +177,6 @@
     let customerPoints = 0;
 
     // appliedDiscount is the monetary amount to subtract (VND)
-    // NOTE: this is not mutated by renderCart except for display clamping — it's the user's requested discount amount.
     let appliedDiscount = 0;
 
     renderCart();
@@ -247,7 +247,6 @@
         renderCart();
     }
 
-    // parse the input string into integer VND (remove separators, non-digits)
     function parsePointsInput(raw) {
         if (!raw) return 0;
         const cleaned = String(raw).replace(/[^\d\-]+/g, '');
@@ -259,10 +258,8 @@
         let rawVal = document.getElementById('applied-points-input').value.trim();
         let errorMsg = document.getElementById('points-error-msg');
     
-        // parse numeric VND value
         let inputVal = parsePointsInput(rawVal);
     
-        // treat empty or zero as "remove discount"
         if (rawVal === "" || inputVal === 0) {
             appliedDiscount = 0;
             errorMsg.style.display = 'none';
@@ -270,7 +267,6 @@
             return;
         }
     
-        // NẾU LỖI: Bắt buộc reset appliedDiscount về 0 và gọi lại renderCart()
         if (inputVal < 0) {
             appliedDiscount = 0;
             errorMsg.innerText = "Số điểm không hợp lệ!";
@@ -300,13 +296,11 @@
             return;
         }
     
-        // HỢP LỆ: Áp dụng giảm giá
         appliedDiscount = inputVal;
         errorMsg.style.display = 'none';
         renderCart();
     }
 
-    // keep appliedDiscount in sync when input is changed manually
     document.addEventListener('DOMContentLoaded', function() {
         const appliedInput = document.getElementById('applied-points-input');
         if (appliedInput) {
@@ -322,7 +316,6 @@
     });
 
     function renderCart() {
-        // Update stock from product-cards to keep consistency (if product stock changed)
         document.querySelectorAll('.product-card').forEach(card => {
             let pid = card.getAttribute('data-id');
             let stock = parseInt(card.getAttribute('data-stock'));
@@ -344,10 +337,8 @@
         let itemsArray = [];
         for (let id in cart) {
             let item = cart[id];
-            // ensure numeric
             item.price = Number(item.price) || 0;
             item.quantity = Number(item.quantity) || 0;
-            // If stock is 0, treat qty as 0 (exclude from total)
             if (item.stock <= 0) {
                 item.quantity = 0;
             }
@@ -361,31 +352,26 @@
         if (discountRequested < 0) discountRequested = 0;
         let discountAmount = Math.min(discountRequested, Math.round(total));
 
-        // allocate per-item discounts proportionally; keep rounding stable by assigning remainder to last item
-        let cashShares = []; // amount customer pays per item (after discount)
-        let discountShares = []; // discount per item
+        let cashShares = []; 
+        let discountShares = []; 
         let allocatedDiscount = 0;
 
         if (total > 0 && discountAmount > 0 && itemsArray.length > 0) {
             for (let i = 0; i < itemsArray.length; i++) {
                 const it = itemsArray[i];
                 if (i < itemsArray.length - 1) {
-                    // proportional share of the total discount
                     let prop = (it.subtotal / total) * discountAmount;
-                    let itemDiscount = Math.floor(prop / ROUND_GRANULARITY) * ROUND_GRANULARITY; // floor to granularity
-                    // clamp
+                    let itemDiscount = Math.floor(prop / ROUND_GRANULARITY) * ROUND_GRANULARITY; 
                     itemDiscount = Math.max(0, Math.min(itemDiscount, Math.round(it.subtotal)));
                     discountShares.push(itemDiscount);
                     allocatedDiscount += itemDiscount;
                 } else {
-                    // last item gets the remainder to ensure sum(discountShares) == discountAmount
                     let last = discountAmount - allocatedDiscount;
                     last = Math.max(0, Math.min(Math.round(last), Math.round(it.subtotal)));
                     discountShares.push(last);
                     allocatedDiscount += last;
                 }
             }
-            // compute cash shares
             for (let i = 0; i < itemsArray.length; i++) {
                 const it = itemsArray[i];
                 const disc = discountShares[i] || 0;
@@ -393,25 +379,21 @@
                 cashShares.push(pay);
             }
         } else {
-            // no discount - customer pays full subtotal for each item
             for (let i = 0; i < itemsArray.length; i++) {
                 cashShares.push(Math.round(itemsArray[i].subtotal));
                 discountShares.push(0);
             }
         }
 
-        // safety: if rounding introduced a small diff, fix last item
         const sumCash = cashShares.reduce((s, v) => s + v, 0);
         const expectedCash = Math.round(total) - discountAmount;
         if (sumCash !== expectedCash && cashShares.length > 0) {
             const diff = expectedCash - sumCash;
             cashShares[cashShares.length - 1] = Math.max(0, cashShares[cashShares.length - 1] + diff);
-            // recalc discountShares for last item
             const lastIdx = cashShares.length - 1;
             discountShares[lastIdx] = Math.round(itemsArray[lastIdx].subtotal) - cashShares[lastIdx];
         }
 
-        // Build table rows
         itemsArray.forEach(function(it, idx){
             let id = it.id;
             let item = cart[id];
@@ -428,41 +410,50 @@
                 : '';
             let inputBorderClass = (item.showWarning || item.stock <= 0) ? 'border-danger text-danger' : '';
 
+            // Tính đơn giá hiển thị (có gạch ngang nếu có giảm giá)
+            let baseUnitPrice = Math.round(item.price);
+            let effectiveUnitPrice = item.quantity > 0 ? Math.round(cashShare / item.quantity) : baseUnitPrice;
+            let unitPriceDisplay = '';
+            if (discShare > 0) {
+                let basePriceStr = baseUnitPrice.toLocaleString() + 'đ';
+                let effectiveStr = effectiveUnitPrice.toLocaleString() + 'đ';
+                unitPriceDisplay = `<div style="font-size: 12px;"><del class="text-muted">${basePriceStr}</del><br><span class="text-danger fw-bold">${effectiveStr}</span></div>`;
+            } else {
+                unitPriceDisplay = `<span class="fw-bold" style="font-size: 13px;">${baseUnitPrice.toLocaleString()}đ</span>`;
+            }
+
             tbody.innerHTML += `
                 <tr>
                     <td><span class="text-muted fw-bold" style="font-size: 13px;">${item.code || '---'}</span></td>
                     <td>
-                        <div class="fw-bold text-dark text-truncate" style="font-size: 13px; max-width: 140px;" title="${item.name}">${item.name}</div>
+                        <div class="fw-bold text-dark text-truncate" style="font-size: 13px; max-width: 120px;" title="${item.name}">${item.name}</div>
                         ${stockDisplay}
                         <div class="text-muted" style="font-size: 11px;">
-                            Gốc: <span class="fw-bold text-danger">${subtotal.toLocaleString()}đ</span> | Giảm: <span class="fw-bold text-dark">${discShare.toLocaleString()}đ</span>
+                            Tổng gốc: <span class="fw-bold text-danger">${subtotal.toLocaleString()}đ</span> | Giảm: <span class="fw-bold text-dark">${discShare.toLocaleString()}đ</span>
                         </div>
                     </td>
                     <td>
                         <input type="number" value="${item.quantity}" min="1" class="fw-bold form-control form-control-sm ${inputBorderClass}" style="font-size: 13px;" onchange="updateQty(${id}, this.value)">
                         ${errorMsg}
                     </td>
+                    <td class="text-end">${unitPriceDisplay}</td>
                     <td class="text-end fw-bold text-danger" style="font-size: 14px;">${cashShare.toLocaleString()}đ</td>
                     <td class="text-center"><button class="btn btn-sm text-danger p-0" onclick="removeItem(${id})"><i class="fa fa-trash"></i></button></td>
                 </tr>
             `;
         });
 
-        // update totals display
         document.getElementById('lbl-total').innerText = Math.round(total).toLocaleString() + ' đ';
 
-        // Tìm đoạn code này trong hàm renderCart() và thay thế:
         let discountRow = document.getElementById('discount-row');
         if (discountAmount > 0) {
             document.getElementById('lbl-discount').innerText = '-' + discountAmount.toLocaleString() + ' đ';
             discountRow.style.display = 'flex';
         } else {
-            // FIX: Cập nhật text thành '0 đ' một cách tường minh trước khi ẩn (hoặc bạn có thể đổi 'none' thành 'flex' nếu muốn dòng này luôn hiện)
             document.getElementById('lbl-discount').innerText = '0 đ';
             discountRow.style.display = 'none'; 
         }
         
-        // Tổng tiền thanh toán cuối cùng sẽ tự động chính xác vì discountAmount đã = 0
         let finalCash = Math.max(0, Math.round(total) - discountAmount);
         document.getElementById('lbl-final-total').innerText = finalCash.toLocaleString() + ' đ';
     }
@@ -516,8 +507,7 @@
         })
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success') {
-                alert("Thanh toán thành công!");
+            if (data.status === 'success') {                
                 cart = {};
                 localStorage.removeItem('pos_cart');
                 customerPoints = 0;
