@@ -74,6 +74,7 @@ class OrderService:
                 'product': product,
                 'quantity': qty,
                 'price': product.price,
+                'total': item_total,
                 'import_price': product.import_price,
             })
 
@@ -90,7 +91,25 @@ class OrderService:
                 else:
                     raise ValueError("Khách hàng không đủ điểm tích lũy!")
 
-        final_price = max(Decimal(0), total_price - Decimal(applied_points))
+        # Phân bổ giảm giá điểm tích lũy cho từng sản phẩm
+        discount_value = Decimal(int(applied_points))
+        item_discounts = []
+        allocated_discount = Decimal(0)
+
+        for i, it in enumerate(order_items_data):
+            if i < len(order_items_data) - 1 and total_price > 0:
+                exact_disc = (it['total'] / total_price) * discount_value
+                rounded_disc = (exact_disc / 1000).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * 1000
+                rounded_disc = max(Decimal(0), min(rounded_disc, it['total']))
+                item_discounts.append(rounded_disc)
+                allocated_discount += rounded_disc
+            else:
+                last_disc = discount_value - allocated_discount
+                last_disc = max(Decimal(0), min(last_disc, it['total']))
+                item_discounts.append(last_disc)
+                allocated_discount += last_disc
+
+        final_price = max(Decimal(0), total_price - discount_value)
 
         order = Order.objects.create(
             customer=customer,
@@ -104,16 +123,21 @@ class OrderService:
             printed_at=timezone.now()
         )
 
-        for it in order_items_data:
+        for i, it in enumerate(order_items_data):
             product = it['product']
-            product.stock -= it['quantity']
+            qty = it['quantity']
+            total_item_disc = item_discounts[i]
+            disc_per_unit = total_item_disc / Decimal(qty) if qty > 0 else Decimal(0)
+
+            product.stock -= qty
             product.save()
 
             OrderItem.objects.create(
                 order=order,
                 product=product,
-                quantity=it['quantity'],
-                price=it['price'],
+                quantity=qty,
+                price=product.price,
+                discount_per_unit=disc_per_unit,
                 import_price=it['import_price']
             )
 

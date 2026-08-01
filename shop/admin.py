@@ -19,6 +19,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError as AdminValidationError
 from django.db.models.functions import TruncDay, TruncMonth, Coalesce
 from django.template import Template, RequestContext
+from decimal import Decimal, ROUND_HALF_UP
 
 from .models import (
     Category, Product, ShopConfiguration, BannerImage,
@@ -125,21 +126,17 @@ class ProductAdmin(admin.ModelAdmin):
     def update_data_view(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
 
-        if product.stock != 0:
-            messages.error(request,
-                           f"Không thể cập nhật: Tồn kho của '{product.name}' đang là {product.stock}, phải bằng 0 mới được phép cập nhật!")
+        # Lấy giá trị mới, mặc định là 0 nếu trống/None
+        new_stock = product.new_stock or 0
+        new_import_price = product.new_import_price or Decimal('0')
+
+        # Kiểm tra dữ liệu nhập mới hợp lệ
+        if new_stock <= 0 or new_import_price <= 0:
+            messages.error(request, "Không thể cập nhật: Số lượng mới và giá nhập mới phải lớn hơn 0!")
             return redirect('admin:shop_product_changelist')
 
-        if product.new_stock is None or product.new_stock == 0:
-            messages.error(request, "Không thể cập nhật: Số lượng mới phải khác 0!")
-            return redirect('admin:shop_product_changelist')
-
-        if product.new_import_price is None or product.new_import_price == 0:
-            messages.error(request, "Không thể cập nhật: Giá nhập mới phải khác 0!")
-            return redirect('admin:shop_product_changelist')
-
-        old_import_price = product.import_price
-        new_import_price = product.new_import_price
+        old_stock = product.stock or 0
+        old_import_price = product.import_price or Decimal('0')
 
         try:
             with transaction.atomic():
@@ -151,16 +148,30 @@ class ProductAdmin(admin.ModelAdmin):
                         order__created_at__lte=timezone.now()
                     ).update(import_price=old_import_price)
 
+                # Lưu giá bán cũ
                 product.sale_price = product.price
-                if new_import_price and new_import_price > 0:
-                    product.import_price = new_import_price
-                    product.new_import_price = 0
 
-                product.stock = product.new_stock if product.new_stock is not None else 0
+                # Tính tổng số lượng tồn kho sau khi cộng thêm
+                total_stock = old_stock + new_stock
+
+                # Tính giá nhập trung bình (bình quân gia quyền)
+                if total_stock > 0:
+                    total_value = (Decimal(old_stock) * old_import_price) + (Decimal(new_stock) * new_import_price)
+                    avg_import_price = total_value / Decimal(total_stock)
+                    product.import_price = avg_import_price.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+                else:
+                    product.import_price = new_import_price
+
+                # Cộng thêm số lượng mới vào tồn kho
+                product.stock = total_stock
+
+                # Reset các trường nhập mới về 0
                 product.new_stock = 0
+                product.new_import_price = 0
+
                 product.save()
 
-                msg = f"Đã cập nhật thành công sản phẩm: {product.name}."
+                msg = f"Đã cập nhật thành công sản phẩm: {product.name}. Đã cộng thêm {new_stock} sản phẩm. Tồn kho mới: {product.stock}, Giá nhập trung bình mới: {product.import_price:,.0f}đ.".replace(",", ".")
                 if backfilled:
                     msg += f" Đã lưu giá nhập cũ vào {backfilled} mục đơn hàng để bảo toàn báo cáo giá vốn."
                 messages.success(request, msg)
@@ -364,7 +375,6 @@ class OrderAdmin(admin.ModelAdmin):
         config = ShopConfiguration.get_config()
         items = order.items.select_related('product').all()
 
-        # Bảo mật XSS bằng cách escape các chuỗi đầu vào từ dữ liệu người dùng
         safe_title = escape(config.title)
         safe_address = escape(config.address)
         safe_phone = escape(config.phone)
@@ -380,6 +390,10 @@ class OrderAdmin(admin.ModelAdmin):
             <meta charset="utf-8">
             <title>In đơn hàng #{order.id}</title>
             <style>
+                @page {{
+                    size: auto;
+                    margin: 10mm;
+                }}
                 body {{ font-family: Arial, sans-serif; font-size: 14px; color: #333; margin: 0; padding: 20px; }}
                 .invoice-box {{ max-width: 750px; margin: auto; padding: 25px; border: 1px solid #ddd; background: #fff; }}
                 .header {{ text-align: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 15px; }}
@@ -424,7 +438,6 @@ class OrderAdmin(admin.ModelAdmin):
                             </td>
                             <td>
                                 <b>Địa chỉ nhận hàng:</b> {safe_order_address}<br>
-                                <b>Ghi chú đơn:</b> <span style="color: #d9534f;">{safe_note}</span>
                             </td>
                         </tr>
                     </table>
@@ -450,11 +463,11 @@ class OrderAdmin(admin.ModelAdmin):
             unit_price = base_price - discount
             subtotal = unit_price * item.quantity
 
-            # Hiển thị giá gốc gạch ngang và giá sau giảm với cùng cỡ chữ và màu sắc mặc định của bảng
             if discount > 0:
                 base_price_str = f"{base_price:,.0f}".replace(",", ".") + "đ"
                 final_unit_price_str = f"{unit_price:,.0f}".replace(",", ".") + "đ"
-                price_str = f'<del>{base_price_str}</del> &rarr; <span>{final_unit_price_str}</span>'
+                # Sửa lại định dạng thành dạng xếp chồng: giá gốc gạch ngang ở trên, giá giảm ở dưới
+                price_str = f'<div style="line-height: 1.3;"><del style="color: #6c757d; font-size: 12px;">{base_price_str}</del><br><span style="color: #d9534f; font-weight: bold;">{final_unit_price_str}</span></div>'
             else:
                 price_str = f"{base_price:,.0f}".replace(",", ".") + "đ"
 
@@ -462,24 +475,41 @@ class OrderAdmin(admin.ModelAdmin):
             product_name = escape(item.product.name if item.product else 'Sản phẩm')
 
             item_rows += f"""
-                                        <tr>
-                                            <td style="text-align: center;">{index}</td>
-                                            <td style="text-align: left;">{product_name}</td>
-                                            <td style="text-align: center;">{item.quantity}</td>
-                                            <td style="text-align: center;">{price_str}</td>
-                                            <td style="text-align: right;">{subtotal_str}</td>
-                                        </tr>
-                            """
+                                <tr>
+                                    <td style="text-align: center;">{index}</td>
+                                    <td style="text-align: left;">{product_name}</td>
+                                    <td style="text-align: center;">{item.quantity}</td>
+                                    <td style="text-align: center;">{price_str}</td>
+                                    <td style="text-align: right;">{subtotal_str}</td>
+                                </tr>
+                    """
 
         html_content += item_rows
+
+        total_price_str = f"{order.total_price:,.0f}".replace(",", ".") + "đ"
         final_price_str = f"{order.final_price:,.0f}".replace(",", ".") + "đ"
+
+        discount_row_html = ""
+        if order.applied_points > 0:
+            discount_amount_str = f"-{order.applied_points:,.0f}".replace(",", ".") + "đ"
+            discount_row_html = f"""
+                        <tr>
+                            <td><b>Giảm giá (Điểm):</b></td>
+                            <td class="text-right" style="color: #2b8a3e;"><b>{discount_amount_str}</b></td>
+                        </tr>
+            """
 
         html_content += f"""
                     </tbody>
                 </table>
                 <div style="clear: both;"></div>
                 <div class="totals">
-                    <table>                        
+                    <table>
+                        <tr>
+                            <td><b>Tổng tiền hàng:</b></td>
+                            <td class="text-right"><b>{total_price_str}</b></td>
+                        </tr>
+                        {discount_row_html}
                         <tr style="border-top: 2px solid #333;">
                             <td><b>Thanh Toán:</b></td>
                             <td class="text-right" style="font-size: 16px; color: #d9534f;"><b>{final_price_str}</b></td>
@@ -491,6 +521,11 @@ class OrderAdmin(admin.ModelAdmin):
                     <button onclick="window.print();">🖨️ In Hóa Đơn Ngay</button>
                 </div>
             </div>
+            <script>
+                window.onload = function() {{
+                    window.print();
+                }};
+            </script>
         </body>
         </html>
         """
