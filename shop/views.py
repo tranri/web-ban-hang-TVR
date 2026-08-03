@@ -25,6 +25,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
 from .services import OrderService
+from django.contrib.postgres.search import SearchVector
 import json
 
 logger = logging.getLogger(__name__)
@@ -49,9 +50,10 @@ def pos_dashboard(request):
 def pos_search_product(request):
     """API tìm kiếm sản phẩm bằng mã vạch hoặc tên cho POS"""
     query = request.GET.get('q', '').strip()
-    products = Product.objects.filter(
-        Q(name__icontains=query) | Q(code__iexact=query)
-    )[:20]
+    
+    products = Product.objects.annotate(
+        search=SearchVector('name', 'code'),
+    ).filter(search=query)[:20]
 
     data = []
     for p in products:

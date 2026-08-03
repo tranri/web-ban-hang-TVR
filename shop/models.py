@@ -88,6 +88,10 @@ class Product(models.Model):
         ordering = ['name']
         verbose_name = 'Sản phẩm'
         verbose_name_plural = 'Các sản phẩm'
+        indexes = [
+            models.Index(fields=['name']),  # Tối ưu hóa tìm kiếm tên
+            models.Index(fields=['code']),  # Tối ưu hóa tìm kiếm mã sản phẩm
+        ]
 
     def __str__(self):
         return self.name
@@ -215,6 +219,11 @@ class Order(models.Model):
     class Meta:
         verbose_name = "Đơn hàng"
         verbose_name_plural = "Quản lý đơn hàng"
+        indexes = [
+            # Tối ưu hóa query: Order.objects.filter(phone=..., points_awarded=False)
+            models.Index(fields=['phone', 'points_awarded']),
+            models.Index(fields=['created_at']),
+        ]
 
     def __str__(self):
         return f"Đơn hàng {self.id} - {self.full_name}"
