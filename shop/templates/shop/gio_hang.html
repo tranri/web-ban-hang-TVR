@@ -221,6 +221,26 @@
         const msgEl = document.getElementById(`page-msg-${pId}`);
         const mRow = document.getElementById(`cart-row-${pId}`);
 
+        // 1. Cập nhật số lượng trên badge ở thanh điều hướng (navbar)
+        if (data.total_items !== undefined) {
+            const badgeEl = document.getElementById('cart-badge-count');
+            if (badgeEl) badgeEl.innerText = data.total_items;
+        }
+
+        // 2. Cập nhật mini-cart trên navbar (nếu có trên DOM)
+        const miniInp = document.getElementById(`mini-qty-${pId}`);
+        if (miniInp && data.current_qty !== undefined) {
+            miniInp.value = data.current_qty;
+        }
+        const miniPriceEl = document.getElementById(`mini-price-text-${pId}`);
+        if (miniPriceEl && data.item_subtotal !== undefined) {
+            miniPriceEl.innerText = data.item_subtotal.replace('đ', '').trim();
+        }
+        const miniGrandTotal = document.getElementById('mini-cart-grand-total');
+        if (miniGrandTotal && data.tong_tien !== undefined) {
+            miniGrandTotal.innerText = data.tong_tien.replace('đ', '').trim();
+        }
+
         if (data.status === 'out_of_stock' || (data.available_stock !== undefined && data.available_stock <= 0)) {
             if (inp) {
                 inp.value = 0;
@@ -246,6 +266,9 @@
 
         if (data.status === 'removed' || (data.current_qty !== undefined && Number(data.current_qty) === 0 && data.status !== 'out_of_stock')) {
             if (mRow) mRow.remove();
+            const miniRow = document.getElementById(`mini-row-${pId}`);
+            if (miniRow) miniRow.remove();
+
             tinhLaiTongThanhToan();
             const tbody = document.querySelector('tbody');
             if (!tbody || tbody.querySelectorAll('tr').length === 0) {
@@ -379,8 +402,20 @@
             if (data.status === 'success') {
                 const row = document.getElementById(`cart-row-${pId}`);
                 if (row) row.remove();
+                const miniRow = document.getElementById(`mini-row-${pId}`);
+                if (miniRow) miniRow.remove();
 
                 tinhLaiTongThanhToan();
+
+                // Đồng bộ badge số lượng và tổng tiền thanh toán ở navbar / mini-cart khi xóa
+                const badgeEl = document.getElementById('cart-badge-count');
+                if (badgeEl && data.total_items !== undefined) {
+                    badgeEl.innerText = data.total_items;
+                }
+                const miniGrandTotal = document.getElementById('mini-cart-grand-total');
+                if (miniGrandTotal && data.tong_tien !== undefined) {
+                    miniGrandTotal.innerText = data.tong_tien.replace('đ', '').trim();
+                }
 
                 const tbody = document.querySelector('tbody');
                 if (!tbody || tbody.querySelectorAll('tr').length === 0) {

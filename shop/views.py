@@ -526,12 +526,31 @@ def trang_chu(request):
 
 def chi_tiet_san_pham(request, slug):
     context = build_render_context(request, 'shop/chi_tiet_san_pham.html', include_categories=False)
-    context['categories'] = get_cached_all_categories()  # Sử dụng cache toàn bộ danh mục
-    context['product'] = get_object_or_404(Product, slug=slug)
+    context['categories'] = get_cached_all_categories()
+
+    product = get_object_or_404(Product, slug=slug)
+    context['product'] = product
+
+    schema_data = {
+        "@context": "https://schema.org/",
+        "@type": "Product",
+        "name": product.name,
+        "image": request.build_absolute_uri(product.image.url) if product.image else "",
+        "description": product.meta_description or product.description[:160],
+        "sku": product.code or str(product.id),
+        "offers": {
+            "@type": "Offer",
+            "priceCurrency": "VND",
+            "price": str(product.price),
+            "availability": "https://schema.org/InStock" if product.stock > 0 else "https://schema.org/OutOfStock",
+            "url": request.build_absolute_uri()
+        }
+    }
+    context['schema_json'] = json.dumps(schema_data, ensure_ascii=False)
 
     cart = request.session.get('cart', {})
     qty_in_cart = 0
-    product_id_str = str(context['product'].id)
+    product_id_str = str(product.id)
     if product_id_str in cart:
         qty_in_cart = cart[product_id_str].get('quantity', 0)
 
@@ -885,3 +904,33 @@ def get_cached_document_posts():
         posts = list(DocumentPost.objects.all())
         cache.set('shop_document_posts', posts, 900)
     return posts
+
+
+def sitemap_xml(request):
+    base_url = request.build_absolute_uri('/')[:-1]
+
+    xml_content = ['<?xml version="1.0" encoding="UTF-8"?>']
+    xml_content.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+
+    # Trang chủ & Trang tĩnh
+    xml_content.append(f'<url><loc>{base_url}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>')
+    xml_content.append(f'<url><loc>{base_url}/lien-he/</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>')
+    xml_content.append(f'<url><loc>{base_url}/tai-lieu/</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>')
+
+    # Danh mục sản phẩm
+    for category in Category.objects.all():
+        loc = f"{base_url}/?category={category.slug}"
+        xml_content.append(f'<url><loc>{loc}</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>')
+
+    # Sản phẩm chi tiết
+    for product in Product.objects.all():
+        loc = f"{base_url}/san-pham/{product.slug}/"
+        xml_content.append(f'<url><loc>{loc}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>')
+
+    # Bài viết tài liệu
+    for post in DocumentPost.objects.all():
+        loc = f"{base_url}/tai-lieu/{post.slug}/"
+        xml_content.append(f'<url><loc>{loc}</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>')
+
+    xml_content.append('</urlset>')
+    return HttpResponse("\n".join(xml_content), content_type="application/xml")

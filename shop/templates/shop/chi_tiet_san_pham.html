@@ -3,6 +3,16 @@
 
 {% block title %}{{ product.name }} - {{ config.title }}{% endblock %}
 
+{% block extra_head %}
+<!-- Meta Description cho SEO -->
+<meta name="description" content="{{ product.meta_description|default:product.description|truncatechars:160 }}">
+    
+<!-- Schema.org Structured Data -->
+<script type="application/ld+json">
+    {{ schema_json|safe }}
+</script>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4 mt-3">
     <div class="row g-3">

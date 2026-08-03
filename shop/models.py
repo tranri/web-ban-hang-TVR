@@ -78,6 +78,12 @@ class Product(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="Thuế (%)")
     defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
 
+    meta_description = models.CharField(
+        max_length=160, blank=True,
+        verbose_name="Mô tả Meta (SEO)",
+        help_text="Tối đa 160 ký tự hiển thị trên Google."
+    )
+    
     class Meta:
         ordering = ['name']
         verbose_name = 'Sản phẩm'
@@ -174,7 +180,11 @@ class DocumentPost(models.Model):
     content = models.TextField(verbose_name="Nội dung chi tiết/Hướng dẫn/Mã code")
     file_url = models.URLField(blank=True, verbose_name="Link tải File đính kèm (nếu có)")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ngày đăng")
-
+    meta_description = models.CharField(
+        max_length=160, blank=True,
+        verbose_name="Mô tả Meta (SEO)"
+    )
+    
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Bài viết tài liệu"

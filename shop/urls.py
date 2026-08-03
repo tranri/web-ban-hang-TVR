@@ -30,4 +30,5 @@ urlpatterns = [
     path('pos/search/', views.pos_search_product, name='pos_search_product'),
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
     path('pos/customer-points/', views.pos_get_customer_points, name='pos_get_customer_points'),
+    path('sitemap.xml', views.sitemap_xml, name='sitemap_xml'),                             
 ]
