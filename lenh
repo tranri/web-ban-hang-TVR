@@ -2,6 +2,7 @@ git add .
 git commit -m "Mô tả của anh"
 git push
 
+
 tối ưu hóa hiệu suất và tăng cường bảo mật
 
 python manage.py makemigrations

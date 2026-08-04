@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,11 +7,7 @@ ENV/
 db.sqlite3
 staticfiles/
 media/
-# IDE - PyCharm
 .idea/
-
-# Database cục bộ (giai đoạn phát triển)
 *.sqlite3
-
-# Môi trường bí mật
 .env
+*.pyc

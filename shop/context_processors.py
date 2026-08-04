@@ -7,7 +7,6 @@ def customer_info(request):
     customer_id = request.session.get('customer_id')
     customer_points = 0
 
-    # Get customer points if logged in
     if customer_id:
         try:
             customer = Customer.objects.get(id=customer_id)
@@ -22,7 +21,6 @@ def customer_info(request):
 
 
 def global_cart(request):
-    """Cache cart items to reduce database queries"""
     cart = request.session.get('cart', {})
     if not cart:
         return {'global_cart_items': []}
@@ -52,12 +50,14 @@ def shop_global_settings(request):
 
 
 def categories_list(request):
-    """Cache categories - rarely change"""
+    """Lấy danh mục cây sử dụng cache.get_or_set tối ưu"""
     cache_key = 'shop_categories_tree'
-    categories = cache.get(cache_key)
 
-    if categories is None:
-        categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
-        cache.set(cache_key, list(categories), 7200)  # Cache for 2 hours
+    # get_or_set tự động gọi lambda lấy dữ liệu mới nếu cache_key chưa có hoặc đã bị xóa
+    categories = cache.get_or_set(
+        cache_key,
+        lambda: list(Category.objects.filter(parent__isnull=True).prefetch_related('children')),
+        7200  # TTL 2 giờ
+    )
 
     return {'categories': categories}

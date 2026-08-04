@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -56,11 +56,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core_backend.wsgi.application'
 
+DATABASE_URL = os.getenv('DATABASE_URL')
+
 if os.getenv('ENVIRONMENT') == 'production':
     # Dùng PostgreSQL cho Production (đọc từ biến DATABASE_URL trong .env)
     DATABASES = {
         'default': dj_database_url.config(
-            default=os.getenv('DATABASE_URL')
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=False
         )
     }
 else:
@@ -72,8 +76,15 @@ else:
         }
     }
 
-# ✅ IMPROVED - Password validation (removed uppercase requirement from validator)
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
+# Quản lý cấu hình Redis dựa trên REDIS_URL trong .env
+REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,
+    }
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -93,37 +104,25 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
-# Tìm các dòng này trong file settings.py và cập nhật giá trị:
 LANGUAGE_CODE = 'vi'
-
+TIME_ZONE = 'Asia/Ho_Chi_Minh'
+USE_TZ = True
 USE_I18N = True
-
-# Chuyển giá trị này thành False để Django không ép dùng định dạng quốc tế (dấu phẩy)
 USE_L10N = False
 
-# Thêm dòng này để định dạng phân cách hàng nghìn bằng dấu chấm
 NUMBER_GROUPING = 3
 THOUSAND_SEPARATOR = '.'
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'shop', 'static'),
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# Đường dẫn URL để truy cập vào ảnh (ví dụ: http://127.0.0.1:8000/media/products/abc.jpg)
 MEDIA_URL = '/media/'
 
-# Thư mục thực tế trên ổ cứng của bạn để lưu file ảnh
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-TIME_ZONE = 'Asia/Ho_Chi_Minh'
-USE_TZ = True
+

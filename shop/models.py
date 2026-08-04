@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.hashers import make_password, check_password, is_password_usable
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils import timezone
@@ -12,7 +12,6 @@ import re
 def normalize_phone(phone: str) -> str:
     if not phone:
         return ""
-    # Remove all non-digit characters except leading +
     cleaned = re.sub(r"[^\d+]", "", str(phone).strip())
     return cleaned
 
@@ -20,7 +19,7 @@ def normalize_phone(phone: str) -> str:
 class Customer(models.Model):
     full_name = models.CharField(max_length=255, verbose_name="Họ tên")
     phone = models.CharField(max_length=20, db_index=True, verbose_name="Số điện thoại")
-    password = models.CharField(max_length=128, verbose_name="Mật khẩu")  # Sẽ lưu mật khẩu đã băm (hash)
+    password = models.CharField(max_length=128, verbose_name="Mật khẩu")
     created_at = models.DateTimeField(auto_now_add=True)
     address = models.TextField(verbose_name="Địa chỉ", null=True, blank=True)
     points = models.IntegerField(default=0, verbose_name="Điểm")
@@ -28,12 +27,44 @@ class Customer(models.Model):
     class Meta:
         verbose_name = "Tài Khoản Khách Hàng"
         verbose_name_plural = "Tài Khoản Khách Hàng"
+        indexes = [
+            models.Index(fields=['phone']),
+        ]
 
     def set_password(self, raw_password):
-        self.password = make_password(raw_password)
+        """
+        Băm mật khẩu sử dụng thuật toán an toàn mặc định của Django (PBKDF2/Argon2).
+        """
+        if raw_password:
+            self.password = make_password(raw_password)
+        else:
+            self.set_unusable_password()
+
+    def set_unusable_password(self):
+        """
+        Gán mật khẩu dạng không thể dùng để đăng nhập (dành cho tài khoản tự tạo khi đặt hàng).
+        """
+        self.password = make_password(None)
+
+    def has_usable_password(self):
+        """
+        Kiểm tra xem mật khẩu hiện tại có hợp lệ và có thể dùng để đăng nhập hay không.
+        """
+        return is_password_usable(self.password)
 
     def check_password(self, raw_password):
-        return check_password(raw_password, self.password)
+        """
+        Kiểm tra mật khẩu an toàn chống Timing Attack qua django.contrib.auth.hashers.check_password.
+        Tự động cập nhật hash nếu Django thay đổi cấu hình thuật toán băm (setter).
+        """
+        if not raw_password or not self.has_usable_password():
+            return False
+
+        def setter(raw_pwd):
+            self.set_password(raw_pwd)
+            self.save(update_fields=['password'])
+
+        return check_password(raw_password, self.password, setter)
 
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
@@ -59,7 +90,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE, verbose_name="Danh mục")
-    code = models.CharField(max_length=100, unique=True, verbose_name="Mã sản phẩm", null=True, blank=True)
+    code = models.CharField(max_length=100, unique=True, db_index=True, verbose_name="Mã sản phẩm", null=True, blank=True)
     name = models.CharField(max_length=200, verbose_name="Tên sản phẩm")
     slug = models.SlugField(max_length=200, unique=True, verbose_name="Đường dẫn (Slug)")
     image = models.ImageField(upload_to="products/%Y/%m/%d", blank=True, null=True, verbose_name="Hình ảnh")
@@ -78,6 +109,8 @@ class Product(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="Thuế (%)")
     defective_quantity = models.IntegerField(default=0, blank=True, null=True, verbose_name="Số lượng hàng lỗi")
 
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name="Đang kinh doanh")
+    
     meta_description = models.CharField(
         max_length=160, blank=True,
         verbose_name="Mô tả Meta (SEO)",
@@ -89,8 +122,10 @@ class Product(models.Model):
         verbose_name = 'Sản phẩm'
         verbose_name_plural = 'Các sản phẩm'
         indexes = [
-            models.Index(fields=['name']),  # Tối ưu hóa tìm kiếm tên
-            models.Index(fields=['code']),  # Tối ưu hóa tìm kiếm mã sản phẩm
+            models.Index(fields=['name']),
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['category', 'is_active']),
         ]
 
     def __str__(self):
@@ -158,11 +193,6 @@ class ShopConfiguration(models.Model):
     @staticmethod
     def clear_cache():
         cache.delete('shop_config')
-
-
-@receiver(post_save, sender=ShopConfiguration)
-def clear_shop_config_cache(sender, instance, **kwargs):
-    ShopConfiguration.clear_cache()
 
 
 class BannerImage(models.Model):
@@ -345,8 +375,6 @@ class OrderItem(models.Model):
                                             verbose_name="Giảm giá mỗi đơn vị")
     returned_quantity = models.PositiveIntegerField(default=0, verbose_name="Số lượng trả hàng")
 
-    # New: record product import price at the time of sale so COGS is historical.
-    # Make it nullable so old rows without a saved import price will fall back to product.import_price.
     import_price = models.DecimalField(
         max_digits=12, decimal_places=0, null=True, blank=True, default=None,
         verbose_name="Giá nhập (tại thời điểm bán, VNĐ)"
@@ -354,28 +382,34 @@ class OrderItem(models.Model):
 
     class Meta:
         verbose_name = "Mục hàng"
-        # Dòng này sẽ thay đổi tiêu đề "ORDER ITEMS" thành "Chi tiết đơn hàng"
         verbose_name_plural = "Chi tiết đơn hàng"
 
     def __str__(self):
-        return ""
+        return f"{self.product.name} (x{self.quantity})"
 
 
 class SalesReport(Order):
-    """Proxy model used only to show a Reports link in Django admin under the shop app."""
-
     class Meta:
         proxy = True
         verbose_name = "Báo cáo"
         verbose_name_plural = "Báo cáo"
 
 
+@receiver([post_save, post_delete], sender=ShopConfiguration)
+@receiver([post_save, post_delete], sender=BannerImage)
+def clear_shop_config_cache(sender, instance, **kwargs):
+    ShopConfiguration.clear_cache()
+
+
+
 @receiver([post_save, post_delete], sender=Category)
 def clear_category_cache(sender, instance, **kwargs):
+    """Xóa tất cả cache danh mục ngay khi Category thay đổi hoặc bị xóa"""
     cache.delete('shop_categories_tree')
     cache.delete('shop_categories_all')
 
 
 @receiver([post_save, post_delete], sender=DocumentPost)
 def clear_document_cache(sender, instance, **kwargs):
+    """Xóa cache bài viết tài liệu"""
     cache.delete('shop_document_posts')

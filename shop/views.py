@@ -7,19 +7,15 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 from django.urls import reverse
 from django.contrib import messages
-from django.contrib.auth.hashers import make_password
 import random
 from django.db import transaction
 from .forms import OrderForm, CustomerRegisterForm, CustomerLoginForm, UpdateAddressForm, ChangePasswordForm
-import requests
-import threading
 from django.conf import settings
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from django.views.decorators.cache import never_cache
 from django.contrib.messages import get_messages
-from django.contrib import messages as django_messages
 from django.middleware.csrf import get_token
 from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.admin.views.decorators import staff_member_required
@@ -34,7 +30,7 @@ logger = logging.getLogger(__name__)
 @staff_member_required(login_url='/admin/login/')
 def pos_dashboard(request):
     config = ShopConfiguration.get_config()
-    products = Product.objects.select_related('category')
+    products = Product.objects.filter(is_active=True).select_related('category')
     categories = Category.objects.all()
 
     context = {
@@ -48,10 +44,9 @@ def pos_dashboard(request):
 @staff_member_required
 @require_http_methods(["GET"])
 def pos_search_product(request):
-    """API tìm kiếm sản phẩm bằng mã vạch hoặc tên cho POS"""
     query = request.GET.get('q', '').strip()
-    
-    products = Product.objects.annotate(
+
+    products = Product.objects.filter(is_active=True).select_related('category').annotate(
         search=SearchVector('name', 'code'),
     ).filter(search=query)[:20]
 
@@ -92,7 +87,6 @@ def get_shop_config():
         config = ShopConfiguration.objects.first()
         if not config:
             config = ShopConfiguration.objects.create()
-        # cache for 5 minutes
         cache.set('shop_config', config, 300)
     return config
 
@@ -198,7 +192,6 @@ def tai_khoan(request):
                         customer.set_password(new_password)
                         customer.save()
 
-                        # Đồng bộ session hash bảo mật chính xác
                         request.session['customer_auth_hash'] = customer.password[:10]
 
                         messages.success(request, "Mật khẩu đã được thay đổi thành công!")
@@ -212,7 +205,10 @@ def tai_khoan(request):
             context['password_form'] = ChangePasswordForm()
 
         # Tối ưu hóa chống N+1 Query bằng prefetch_related
-        customer_orders = Order.objects.filter(phone=customer.phone).prefetch_related('items__product').order_by('-created_at')
+        customer_orders = Order.objects.filter(phone=customer.phone) \
+            .select_related('customer') \
+            .prefetch_related('items__product__category') \
+            .order_by('-created_at')
         context['customer_orders'] = customer_orders
 
         orders_with_items = []
@@ -237,8 +233,7 @@ def tai_khoan(request):
                     'total': line_total
                 })
 
-            points_used = getattr(order, 'applied_points',
-                                  getattr(order, 'points_used', getattr(order, 'used_points', 0)))
+            points_used = getattr(order, 'applied_points', 0)
 
             time_diff = now - order.created_at
             remaining_days = (limit - time_diff).days + 1 if time_diff < limit else 0
@@ -361,7 +356,6 @@ def thanh_toan(request):
     cart = request.session.get('cart', {})
     cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
-    # KIỂM TRA TỒN KHO TRƯỚC KHI CHO PHÉP VÀO TRANG THANH TOÁN
     for item in cart_items:
         product = item['product']
         qty = item['quantity']
@@ -394,38 +388,6 @@ def thanh_toan(request):
     })
 
     return render(request, 'shop/thanh_toan.html', context)
-
-
-def send_telegram_notification(order, order_items):
-    try:
-        token = settings.TELEGRAM_BOT_TOKEN
-        chat_id = settings.TELEGRAM_CHAT_ID
-
-        if not token or not chat_id:
-            logger.warning("Telegram credentials not configured")
-            return
-
-        items_text = "\n".join(
-            f"- {item.product.name} (x{item.quantity}): {item.price:,.0f}đ"
-            for item in order_items
-        )
-
-        message = f"""🛒 *ĐƠN HÀNG MỚI #{order.id}*
-👤 Khách: {order.full_name}
-📞 SĐT: {order.phone}
-📍 Địa chỉ: {order.address}
-📦 Sản phẩm:
-{items_text}
-💰 Tổng: *{order.total_price:,.0f}đ*"""
-
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        requests.post(url, data={
-            'chat_id': chat_id,
-            'text': message,
-            'parse_mode': 'Markdown'
-        }, timeout=5)
-    except Exception as e:
-        logger.error(f"Telegram notification failed: {e}")
 
 
 @require_http_methods(["POST"])
@@ -471,7 +433,6 @@ def xac_nhan_don_hang(request):
 
 
 def thanh_cong(request):
-    """Trang thông báo đặt hàng thành công đơn giản"""
     context = build_render_context(request, 'shop/thanh_cong.html')
     return render(request, 'shop/thanh_cong.html', context)
 
@@ -487,10 +448,10 @@ def get_top_selling_or_random(target_count=60):
         .order_by('-total_sold')[:target_count]
     )
 
-    products_from_db = list(Product.objects.filter(id__in=top_products_ids).select_related('category'))
+    products_from_db = list(Product.objects.filter(id__in=top_products_ids, is_active=True).select_related('category'))
     product_map = {p.id: p for p in products_from_db}
     products_list = [product_map[pid] for pid in top_products_ids if pid in product_map]
-
+    
     needed = target_count - len(products_list)
     if needed > 0:
         # avoid loading all product ids: fetch a manageable pool and sample from it
@@ -513,7 +474,7 @@ def trang_chu(request):
     category_slug = request.GET.get('category')
 
     if category_slug:
-        products = Product.objects.filter(category__slug=category_slug)
+        products = Product.objects.filter(category__slug=category_slug, is_active=True).select_related('category')
         is_filtered = True
     else:
         products = get_top_selling_or_random(target_count=60)
@@ -530,7 +491,7 @@ def chi_tiet_san_pham(request, slug):
     context = build_render_context(request, 'shop/chi_tiet_san_pham.html', include_categories=False)
     context['categories'] = get_cached_all_categories()
 
-    product = get_object_or_404(Product, slug=slug)
+    product = get_object_or_404(Product.objects.select_related('category'), slug=slug, is_active=True)
     context['product'] = product
 
     schema_data = {
@@ -581,7 +542,6 @@ def chi_tiet_tai_lieu(request, slug):
 
 
 def get_cart_items(cart):
-    """Hàm hỗ trợ lấy danh sách sản phẩm trong giỏ hàng, tính tổng tiền và tổng số lượng tối ưu"""
     cart_items = []
     tong_tien = Decimal(0)
     tong_so_luong = 0
@@ -590,7 +550,7 @@ def get_cart_items(cart):
         return cart_items, tong_tien, tong_so_luong
 
     product_ids = [int(p_id) for p_id in cart.keys()]
-    products = Product.objects.filter(id__in=product_ids).only('id', 'price', 'stock', 'name', 'image', 'slug')
+    products = Product.objects.filter(id__in=product_ids).select_related('category').only('id', 'price', 'stock', 'name', 'image', 'slug', 'category')
     product_map = {str(p.id): p for p in products}
 
     for p_id_str, item_data in cart.items():
@@ -599,7 +559,6 @@ def get_cart_items(cart):
             qty = item_data.get('quantity', 0)
             price = product.price
 
-            # Chỉ tính tiền vào tổng thanh toán nếu sản phẩm còn hàng trong kho
             subtotal = price * qty if product.stock > 0 else Decimal(0)
             if product.stock > 0:
                 tong_tien += subtotal
@@ -712,13 +671,10 @@ def xoa_khoi_gio(request, product_id):
 @require_http_methods(["POST"])
 @csrf_protect
 def cap_nhat_gio_hang(request, product_id):
-    """Cập nhật số lượng sản phẩm trong giỏ hàng qua AJAX"""
-    # Flexible input handling (support form-data and JSON) but validate content-type
     quantity = request.POST.get('quantity')
 
     if not quantity:
         try:
-            # Only attempt JSON decode for JSON content types
             content_type = request.META.get('CONTENT_TYPE', '')
             if content_type.startswith('application/json') and request.body:
                 data = json.loads(request.body)
@@ -734,19 +690,16 @@ def cap_nhat_gio_hang(request, product_id):
     except (ValueError, TypeError):
         qty = 1
 
-    # Clamp the quantity to a reasonable maximum to avoid abuse
     MAX_QTY = 1000
     if qty > MAX_QTY:
         qty = MAX_QTY
 
     cart = request.session.get('cart', {})
-    # compute totals early so we can report them
     cart_items, tong_tien, tong_so_luong = get_cart_items(cart)
 
     p_id_str = str(product_id)
     product = get_object_or_404(Product, id=product_id)
 
-    # If product is out of stock, set cart qty to 0 (do not silently delete)
     if product.stock == 0:
         if p_id_str in cart:
             cart[p_id_str]['quantity'] = 0
@@ -832,7 +785,7 @@ def chinh_sach_bao_mat(request):
 
 def search_api(request):
     query = request.GET.get('q', '')
-    products = Product.objects.filter(name__icontains=query)[:5]
+    products = Product.objects.filter(name__icontains=query, is_active=True).select_related('category')[:5]
 
     results = []
     for p in products:
@@ -847,8 +800,8 @@ def search_api(request):
 
 def ket_qua_tim_kiem(request):
     query = request.GET.get('q', '')
-    products = Product.objects.filter(name__icontains=query) if query else []
-
+    products = Product.objects.filter(name__icontains=query, is_active=True).select_related('category') if query else []
+    
     context = build_render_context(request, 'shop/ket_qua_tim_kiem.html')
     context.update({
         'products': products,

@@ -1,9 +1,9 @@
-# services.py
 import logging
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 import requests
 import threading
 from .models import Product, Order, OrderItem, Customer
@@ -19,21 +19,21 @@ class OrderService:
             chat_id = settings.TELEGRAM_CHAT_ID
 
             if not token or not chat_id:
-                logger.warning("Telegram credentials not configured")
+                logger.warning("Telegram credentials not configured in environment variables.")
                 return
 
-            items_text = "\nnot found".join(  # Hoặc định dạng chuỗi sản phẩm
+            items_text = "\n".join(
                 f"- {item.product.name} (x{item.quantity}): {item.price:,.0f}đ"
                 for item in order_items
             )
 
             message = f"""🛒 *ĐƠN HÀNG MỚI #{order.id}*
-👤 Khách: {order.full_name}
-📞 SĐT: {order.phone}
-📍 Địa chỉ: {order.address}
-📦 Sản phẩm:
-{items_text}
-💰 Tổng: *{order.total_price:,.0f}đ*"""
+            👤 Khách: {order.full_name}
+            📞 SĐT: {order.phone}
+            📍 Địa chỉ: {order.address}
+            📦 Sản phẩm:
+            {items_text}
+            💰 Tổng: *{order.total_price:,.0f}đ*"""
 
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             requests.post(url, data={
@@ -44,6 +44,15 @@ class OrderService:
         except Exception as e:
             logger.error(f"Telegram notification failed: {e}")
 
+    @classmethod
+    def send_telegram_notification_async(cls, order_id):
+        thread = threading.Thread(
+            target=cls._send_telegram_worker,
+            args=(order_id,),
+            daemon=True
+        )
+        thread.start()
+        
     @staticmethod
     @transaction.atomic
     def create_pos_order(data):
@@ -61,7 +70,7 @@ class OrderService:
         order_items_data = []
 
         for item in items:
-            product = Product.objects.select_for_update().get(id=int(item['product_id']))
+            product = Product.objects.select_for_update().select_related('category').get(id=int(item['product_id']))
             qty = int(item['quantity'])
 
             if product.stock < qty:
@@ -82,7 +91,11 @@ class OrderService:
         if customer_phone:
             customer, _ = Customer.objects.get_or_create(
                 phone=customer_phone,
-                defaults={'full_name': customer_name, 'address': customer_address, 'password': ''}
+                defaults={
+                    'full_name': customer_name,
+                    'address': customer_address,
+                    'password': make_password(None)
+                }
             )
             if applied_points > 0:
                 if customer.points >= applied_points:
@@ -159,7 +172,7 @@ class OrderService:
         cart_items_data = []
 
         for p_id, item in cart.items():
-            product = Product.objects.select_for_update().get(id=int(p_id))
+            product = Product.objects.select_for_update().select_related('category').get(id=int(p_id))
 
             if product.stock <= 0:
                 raise ValueError(f"Sản phẩm {product.name} đã hết hàng.")
@@ -221,7 +234,11 @@ class OrderService:
 
         customer, created = Customer.objects.get_or_create(
             phone=order.phone,
-            defaults={'full_name': order.full_name, 'address': order.address, 'password': ''}
+            defaults={
+                'full_name': order.full_name,
+                'address': order.address,
+                'password': make_password(None)
+            }
         )
         if not created:
             customer.full_name = order.full_name
@@ -238,7 +255,7 @@ class OrderService:
             else:
                 raise ValueError("Không đủ điểm để trừ cho đơn hàng.")
 
-        order_items = OrderItem.objects.filter(order=order)
+        order_items = OrderItem.objects.filter(order=order).select_related('product')
         threading.Thread(target=OrderService.send_telegram_notification, args=(order, order_items), daemon=True).start()
 
         return order, order_items, customer
